@@ -1,4 +1,4 @@
-# ioBrokerScripts
+# ioBrokerSetup
 
 Purpose is to keep track on changes on my scripts/views (a save point in case of bugs/corruption).
 
