@@ -575,7 +575,7 @@ function setup() {
         };
 
         createState(listState, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
-        createState(sortModeState, 'name', {name: 'UniFi device listing: sortMode', type: 'string'});
+        createState(sortModeState, sortReset, {name: 'UniFi device listing: sortMode', type: 'string'});
         createState(filterModeState, '', {name: 'UniFi device listing: filterMode', type: 'string'});
 
         // Sorters, filters and some additional translations are saved in states to permit texts localization
