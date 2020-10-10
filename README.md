@@ -1,8 +1,11 @@
 # ioBrokerScripts
 
-Purpose is to keep track on changes on my scripts (and have a save point in case of bugs/corruption)
+Purpose is to keep track on changes on my scripts/views (a save point in case of bugs/corruption).
 
-Free for redistribution under license terms, but condider to [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=JDL4NA8HJN8LL&item_name=Coffee+and+development+infrastructure+support.+Thank+you%21&currency_code=CHF)
+Feel free to contribute (every pull request is welcome), but keep in mind that this repository is for my personal home automation server,
+new features are probably best suited to a dedicated repository.
+
+You can use this code under license terms (condider to [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=JDL4NA8HJN8LL&item_name=Coffee+and+development+infrastructure+support.+Thank+you%21&currency_code=CHF) if you appreciate).
 
 ## License
 MIT License
