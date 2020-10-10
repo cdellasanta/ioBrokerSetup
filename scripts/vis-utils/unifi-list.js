@@ -64,10 +64,10 @@ createList();
 // Refresh lists every updateInterval minutes
 schedule('*/' + updateInterval + ' * * * *', createList);
 
-// Change on sort mode triggers list generation and sort reset
+// Change on sort mode triggers list generation and reset of sort-timer-reset
 on({id: sortModeState, change: 'any'}, () => { Promise.all([createList(), resetSortTimer()]); });
 
-// Change on filter mode triggers list generation and filter reset
+// Change on filter mode triggers list generation and reset of filter-timer-reset
 on({id: filterModeState, change: 'any'}, () => { Promise.all([createList(), resetFilterTimer()]); });
 
 if (devicesView) {
@@ -77,7 +77,7 @@ if (devicesView) {
 
 function createList() {
     try {
-        let devices = $('[id=unifi.0.default.clients.*.mac]'); // Every time, new devices might have been registered
+        let devices = $('[id=unifi.0.default.clients.*.mac]'); // Query every time function is called (for new devices)
         let deviceList = [];
 
         for (var i = 0; i <= devices.length - 1; i++) {
@@ -85,7 +85,7 @@ function createList() {
             let isWired = getState(idDevice + '.is_wired').val;
             let lastSeen = new Date(getState(idDevice + '.last_seen').val);
 
-            if (isInRange(lastSeen) === true) {
+            if (isInRange(lastSeen)) {
                 // Values for both WLAN and LAN
                 let isConnected = getState(idDevice + '.is_online').val;
                 let ip = existsState(idDevice + '.ip') ? getState(idDevice + '.ip').val : '';
@@ -100,7 +100,7 @@ function createList() {
                 let buttonLink = '';
                 setLink();
 
-                // Variables for values that are fetched differntly fepending of LAN & WLAN device
+                // Variables for values that are fetched differntly depending on device wireing
                 let receivedRaw = getTraffic(isWired, idDevice)
                 let received = formatTraffic(receivedRaw).replace('.', ',');
                 let sentRaw = getTraffic(isWired, idDevice, true);
@@ -115,21 +115,21 @@ function createList() {
                     let swPort = getState(idDevice + '.sw_port').val;
 
                     // Do not consider fiber ports
-                    if (swPort < 25 && isWired === true) {
-                        speed = getState(`unifi.0.default.devices.${getState(idDevice + '.sw_mac').val}.port_table.port_${swPort}.speed`).val;
-                        uptime = getState(idDevice + '.uptime_by_usw').val;
-                        image = (note && note.image) ? `${imagePath}${note.image}.png` : `${imagePath}lan_noImage.png`
-
-                        addToList();
+                    if (swPort > 24) {
+                        continue; // Skip add
                     }
+
+                    speed = getState(`unifi.0.default.devices.${getState(idDevice + '.sw_mac').val}.port_table.port_${swPort}.speed`).val;
+                    uptime = getState(idDevice + '.uptime_by_usw').val;
+                    image = (note && note.image) ? `${imagePath}${note.image}.png` : `${imagePath}lan_noImage.png`
                 } else {
                     speed = existsState(idDevice + '.channel') ? (getState(idDevice + '.channel').val > 13) ? '5G' : '2G' : '';
                     uptime = getState(idDevice + '.uptime').val;
                     wlanSignal = getState(idDevice + '.signal').val;
                     image = (note && note.image) ? `${imagePath}${note.image}.png` : `${imagePath}wlan_noImage.png`
-
-                    addToList();
                 }
+               
+                addToList();
 
                 function setLink() {
                     if (note && note.link) {
@@ -146,18 +146,10 @@ function createList() {
                 }
 
                 function addToList() {
-                    let statusBarColor = 'FireBrick';
-                    if (isConnected === true) {
-                        statusBarColor = 'green';
-                    }
-
-                    let text = name;
-
-                    if (isGuest === true) {
-                        text = `<span class="mdi mdi-account-box" style="color: #ff9800;"> ${name}</span>`
-                    }
-
+                    let statusBarColor = isConnected ? 'green' : 'FireBrick';
+                    let text = isGuest ? `<span class="mdi mdi-account-box" style="color: #ff9800;"> ${name}</span>` : name;
                     let speedElement = '';
+
                     if (speed === 1000 || speed === 100) {
                         speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
                                            ${getLanSpeed(speed, speedIconSize, isConnected)}
@@ -283,7 +275,7 @@ function createList() {
 
     // Functions **************************************************************************************************************************************
     function getTraffic(isWired, idDevice, isSent = false) {
-        if (isSent === false) {
+        if (!isSent) {
             // Received
             if (isWired) {
                 if (existsState(idDevice + '.wired-tx_bytes')) {
@@ -354,7 +346,7 @@ function createList() {
     }
 
     function getWifiStrength(signal, size, isConnected) {
-        if (isConnected === false) {
+        if (!isConnected) {
             return `<span class="mdi mdi-wifi-off" style="color: gray; font-size: ${size}px"></span>`
         }
 
@@ -368,7 +360,7 @@ function createList() {
     }
 
     function getLanSpeed(speed, size, isConnected) {
-        if (isConnected === false) {
+        if (!isConnected) {
             return `<span class="mdi mdi-network-off" style="color: gray; font-size: ${size}px;"></span>`
         }
 
@@ -380,7 +372,7 @@ function createList() {
     }
 
     function getExperience(experience, size, isConnected) {
-        if (isConnected === false) {
+        if (!isConnected) {
             return `<span class="mdi mdi-speedometer" style="color: gray; font-size: ${size}px;"></span>`
         }
 
