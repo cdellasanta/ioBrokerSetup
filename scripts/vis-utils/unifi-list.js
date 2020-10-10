@@ -243,8 +243,9 @@ function createList() {
                     // Change behaviour to buttonState, a listener on the state change on objectId will trigger the jump to that view
                     obj['listType'] = 'buttonState';
                     obj['objectId'] = viewUrlState;
+                    obj['showValueLabel'] = false;
                     obj['buttonStateValue'] = obj.buttonLink,
-                        delete obj['buttonLink'];
+                    delete obj['buttonLink'];
                 }
             });
 
