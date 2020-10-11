@@ -65,10 +65,10 @@ createList();
 schedule('*/' + updateInterval + ' * * * *', createList);
 
 // Change on sort mode triggers list generation and reset of sort-timer-reset
-on({id: sortModeState, change: 'any'}, () => { Promise.all([createList(), resetSortTimer()]); });
+on({id: sortModeState, change: 'any'}, () => { createList(); resetSortTimer(); });
 
 // Change on filter mode triggers list generation and reset of filter-timer-reset
-on({id: filterModeState, change: 'any'}, () => { Promise.all([createList(), resetFilterTimer()]); });
+on({id: filterModeState, change: 'any'}, () => { createList(); resetFilterTimer(); });
 
 if (devicesView) {
     // On selected device change, go to "Devices" view
@@ -558,7 +558,7 @@ function setup() {
         ];
 
         const viewTranslations = {
-            'Order by': translate('Sort by'),
+            'Sort by': translate('Sort by'),
             'Filter by': translate('Filter by'),
             'Device': translate('Device')
         };
