@@ -4,7 +4,7 @@
  * Requirements:
  *  - UniFi controller running on your network
  *  - UniFi ioBroker adapter >= 0.5.8 (https://www.npmjs.com/package/iobroker.unifi)
- *  - Libraries on ioBroker: cd /opt/iobroker && npm install mathjs moment
+ *  - Libraries on ioBroker
  *  - Some programming skills
  *
  * @license http://www.opensource.org/licenses/mit-license.html  MIT License
@@ -26,11 +26,7 @@ const sortReset = 'name';                 // Value for default and reset sort
 const sortResetAfter = 120;               // Reset sort value after X seconds (0=disabled)
 const filterResetAfter = 120;             // Reset filter after X seconds (0=disabled)
 
-// New/Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
-// If set, two additional states are registered:
-//  - The selected link: to be displayed in an iFrame
-//  - The list of devices having a link: to be used in jsonList materials design. List is an array of following elements:
-//    {name: <(string) device name>, value: <(string) the link URL>, icon: <(string) see https://materialdesignicons.com>}
+// Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
 const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: 1};
 
 const speedIconSize = 20;
@@ -55,7 +51,7 @@ const translationsState = statePrefix + '.translations';
 const linksListState = statePrefix + '.linksJsonList';
 const viewUrlState = statePrefix + '.selectedUrl';
 
-// Sates are registered automatically if prefix directory does not exists (delete directory to recreate them)
+// States are registered automatically if prefix directory does not exists (delete directory to recreate them)
 setup();
 
 // Create lists on script startup
@@ -100,7 +96,7 @@ function createList() {
                 let buttonLink = '';
                 setLink();
 
-                // Variables for values that are fetched differntly depending on device wireing
+                // Variables for values that are fetched differently depending on device wiring
                 let receivedRaw = getTraffic(isWired, idDevice)
                 let received = formatTraffic(receivedRaw).replace('.', ',');
                 let sentRaw = getTraffic(isWired, idDevice, true);
@@ -148,18 +144,18 @@ function createList() {
                 function addToList() {
                     let statusBarColor = isConnected ? 'green' : 'FireBrick';
                     let text = isGuest ? `<span class="mdi mdi-account-box" style="color: #ff9800;"> ${name}</span>` : name;
-                    let speedElement = '';
+                    let speedElement;
 
                     if (speed === 1000 || speed === 100) {
                         speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                                           ${getLanSpeed(speed, speedIconSize, isConnected)}
-                                           <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed.toString().replace('1000', '1.000')} MBit/s</span>
-                                       </div>`
+                                            ${getLanSpeed(speed, speedIconSize, isConnected)}
+                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed.toString().replace('1000', '1.000')} MBit/s</span>
+                                        </div>`
                     } else {
                         speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                                           ${getWifiStrength(wlanSignal, speedIconSize, isConnected)}
-                                           <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed}</span>
-                                       </div>`;
+                                            ${getWifiStrength(wlanSignal, speedIconSize, isConnected)}
+                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed}</span>
+                                        </div>`;
                     }
 
                     let receivedElement = `<span class="mdi mdi-arrow-down" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px; margin-right: 4px">${received}</span>`
@@ -168,14 +164,14 @@ function createList() {
                     let experienceElement = `<div style="display: flex; margin-left: 8px; align-items: center;">${getExperience(experience, experienceIconSize, isConnected)}<span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${experienceTextSize}px; margin-left: 4px;">${experience} %</span></div>`
 
                     let subText = `
-                               ${ip}
-                               <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; align-items: center; justify-content: center;">
-                                   ${getOnOffTime(isConnected, uptime, lastSeen)}
-                               </div>
-                               <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; margin-top: 10px; align-items: center;">
-                                   ${speedElement}${receivedElement}${sentElement}${experienceElement}
-                               </div>
-                               `
+                                ${ip}
+                                <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; align-items: center; justify-content: center;">
+                                    ${getOnOffTime(isConnected, uptime, lastSeen)}
+                                </div>
+                                <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; margin-top: 10px; align-items: center;">
+                                    ${speedElement}${receivedElement}${sentElement}${experienceElement}
+                                </div>
+                                `
 
                     deviceList.push({
                         text: text,
@@ -398,13 +394,10 @@ function createList() {
     }
 
     function getOnOffTime(isConnected, uptime, lastSeen) {
-        if (isConnected) {
+        if (isConnected) { /** @todo Translate online/offline texts too */
             return `<span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">online ${moment().subtract(uptime, 's').fromNow()}</span>`
         } else {
-            let now = moment(new Date());
-            let start = moment(lastSeen);
-            let offlineDuration = (moment.duration(now.diff(start)));
-            return `<span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">offline ${moment().subtract(offlineDuration, 's').fromNow()}</span>`
+            return `<span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">offline ${moment(lastSeen).fromNow()}</span>`
         }
     }
 }
