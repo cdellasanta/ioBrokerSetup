@@ -30,7 +30,7 @@ function setViewTranslations() {
     );
 }
 
-function translate(locale, enText) {
+function translate(enText) {
     const map = { // For translations used https://translator.iobroker.in (that uses Google translator)
         "Language": {
             "en": "Language",
@@ -39,7 +39,7 @@ function translate(locale, enText) {
             "pt": "Língua",
             "nl": "Taal",
             "fr": "Langue",
-            "it": "linguaggio",
+            "it": "Lingua",
             "es": "Idioma",
             "pl": "Język",
             "zh-cn": "语言"
@@ -87,7 +87,7 @@ function translate(locale, enText) {
             "pt": "Dispositivos",
             "nl": "Apparaten",
             "fr": "Dispositifs",
-            "it": "dispositivi",
+            "it": "Dispositivi",
             "es": "Dispositivos",
             "pl": "Urządzenia",
             "zh-cn": "设备"
