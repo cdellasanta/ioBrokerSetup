@@ -510,11 +510,11 @@ function setup() {
             }
         ];
 
-        const viewTranslations = {
-            'Sort by': translate('Sort by'),
-            'Filter by': translate('Filter by'),
-            'Device': translate('Device')
-        };
+        const viewTranslations = [
+            'Sort by',
+            'Filter by',
+            'Device'
+        ].reduce((o, key) => ({ ...o, [key]: translate(key)}), {});
 
         createState(`${prefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
         createState(`${prefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'});

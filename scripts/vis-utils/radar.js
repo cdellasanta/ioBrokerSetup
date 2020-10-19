@@ -2,38 +2,89 @@
  * Meteo localized texts and vars
  * 
  */
-const locale = 'it';
+const defaultLocale = 'en';
 const statePrefix = '0_userdata.0.vis.radar';
-const defaultRadarOverlay = 'rain';
-const rotateRadarOverlayInterval = 120; /** @todo implement? */
-const resetOnReload = true; // Enable only when actively developing
+const defaultOverlay = 'rain';
+const rotateOverlayInterval = 120; /** @todo implement? */
+
+// Country coordinetes: have a look to https://developers.google.com/public-data/docs/canonical/countries_csv for yours
+const countryParams = {lat: 46.818188, lon: 8.227512, zoom: 7}; // Switzerland
+
+// Well each continent has more-or-less scientific definitions for its center
+const continentParams = {lat: 50.102223, lon: 9.254419, zoom: 4}; // Old center of EU (corresponds to the headquarters to the European Central Bank)
+
+// Models: refer to https://community.windy.com/topic/12/what-source-of-weather-data-windy-use
+const defaultModel = 'nems';
 
 const configuration = getObject('system.config');
 const latitude = configuration.common.latitude;
 const longitude = configuration.common.longitude;
+const getLocale = () => existsState('0_userdata.0.vis.locale') ? getState('0_userdata.0.vis.locale').val : defaultLocale;
 
-// Create states
-if (!existsState(statePrefix) || resetOnReload) {
-    createState(`${statePrefix}.selectedOverlay`, defaultRadarOverlay, {name: 'Selected radar overlay', type: 'string'});
-    createState(`${statePrefix}.overlays`, '[]', {name: 'List of radar overlays', type: 'string'});
-    createState(`${statePrefix}.includeSubOverlays`, false, {name: 'Include list of sub overlays', type: 'boolean'});
-    createState(`${statePrefix}.displayPressureLines`, false, {name: 'Display pressure lines', type: 'boolean'});
-    createState(`${statePrefix}.detailUrl`, '', {name: 'Localized radar URL', type: 'string'});
-    createState(`${statePrefix}.countryUrl`, '', {name: 'Continent radar URL', type: 'string'});
-    createState(`${statePrefix}.continentUrl`, '', {name: 'Continent radar URL', type: 'string'});
+// Initialization create/delete states, register listeners
+// Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
+
+initializeState(`${statePrefix}.selectedOverlay`, defaultOverlay, {name: 'Selected overlay', type: 'string'}, {change: 'ne'}, obj => updateRadarUrls(obj.state.val));
+initializeState(`${statePrefix}.selectedModel`, defaultModel, {name: 'Selected model', type: 'string'}, {change: 'ne'}, updateRadarUrls);
+initializeState(`${statePrefix}.overlays`, '[]', {name: 'List of radar overlays', type: 'string'});
+initializeState(`${statePrefix}.models`, '[]', {name: 'List of models', type: 'string'});
+initializeState(`${statePrefix}.includeSubOverlays`, false, {name: 'Include list of sub overlays', type: 'boolean'}, {change: 'ne'}, setOverlays);
+initializeState(`${statePrefix}.displayPressureLines`, false, {name: 'Display pressure lines', type: 'boolean'}, {change: 'ne'}, updateRadarUrls);
+initializeState(`${statePrefix}.detailUrl`, '', {name: 'Localized radar URL', type: 'string'});
+initializeState(`${statePrefix}.countryUrl`, '', {name: 'Country radar URL', type: 'string'});
+initializeState(`${statePrefix}.continentUrl`, '', {name: 'Continent radar URL', type: 'string'});
+initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
+
+if (existsState('0_userdata.0.vis.locale')) {
+    runAfterInitialization(() => on({id: '0_userdata.0.vis.locale', change: 'ne'}, setup));
 }
 
-// Initial setup of URLs
-updateRadarUrls();
-setRadarOverlays();
+// Stup once all is initialized run setup functions
+runAfterInitialization(setup);
 
-on({id: `${statePrefix}.includeSubOverlays`, change: 'ne'}, setRadarOverlays);
-on({id: `${statePrefix}.selectedOverlay`, change: 'ne'}, obj => updateRadarUrls(obj.state.val));
-on({id: `${statePrefix}.displayPressureLines`, change: 'ne'}, updateRadarUrls);
+// Functions
+function setup() {
+    updateRadarUrls();
+    setOverlays();
+    setModels();
+    setViewTranslations();
+}
 
-function setRadarOverlays() {
-    const listItem = (enText, value, icon = null) => ({
+function setModels() {
+    // Models should be dependent on what you are seeing (as windy does), but for our purpouse list them all
+    // If you are viewing a position that is not covered by the model, there will be an empty display ...
+    // Taken with a bit of reverse engineering from https://embed.windy.com/v/19.10.3.emb.985a/embed2.js
+    // Descriptions from https://community.windy.com/topic/12/what-source-of-weather-data-windy-use
+
+    const listItem = (value, enText, icon = null) => ({
+        value: value,
         text: translate(enText),
+        icon: icon
+    });
+
+    setState(
+        `${statePrefix}.models`,
+        JSON.stringify([
+            listItem('ecmwf', '(Global, resolution ~9 km) ECMWF (European Centre for Medium-Range Weather Forecasts) www.ecmwf.com'),
+            listItem('gfs', '(Global, resolution ~22 km) GFS (Global Forecast System) - United States national weather service (NWS)'),
+            listItem('arome', '(western Europe, resolution 1,25 km) AROME - French Weather Service (Météo-France)'),
+            listItem('nems', '(Europe, resolution ~4 km) NEMS - Swiss company Meteoblue.com'),
+            listItem('iconEu', '(Europe, resolution ~7 km) ICON-EU - German Weather Service (DWD)'),
+            listItem('namConus', '(continental US, resolution ~5 km) NAM CONUS - North American Mesoscale Forecast System (NAM)'),
+            listItem('namAlaska', '(Alaska, resolution ~6 km) NAM Alaska - North American Mesoscale Forecast System (NAM)'),
+            listItem('namHawaii', '(Hawaii, resolution ~3 km) NAM Hawaii - North American Mesoscale Forecast System (NAM)'),
+            /** @todo include Wave models too?
+             *        ident: "ecmwfWaves", modelName: "ECMWF WAM",   provider: "ECMWF", modelResolution: 13,
+             *        ident: "gfsWaves",   modelName: "Wavewatch 3", provider: "NOAA",  modelResolution: 22,
+             */
+        ]),
+        true
+    );
+}
+
+function setOverlays() {
+    const listItem = (enText, value, icon = null) => ({
+        text: getWindyLabel(enText),
 
         // // For list & iconList 
         // listType: 'buttonState', // needed only for iconList
@@ -50,7 +101,7 @@ function setRadarOverlays() {
 
     setState(
         `${statePrefix}.overlays`, 
-        JSON.stringify([
+        JSON.stringify([ // Taken with a bit of reverse engineering from https://embed.windy.com/v/19.10.3.emb.985a/embed2.js
             listItem('RADAR_BLITZ', 'radar', 'flash-outline'),
             
             listItem('WIND', 'wind', 'weather-windy'),
@@ -103,12 +154,17 @@ function setRadarOverlays() {
 
 function updateRadarUrls(radarOverlay = null) {
     let pressureLines = getState(`${statePrefix}.displayPressureLines`).val || false;
+    let model = getState(`${statePrefix}.selectedModel`).val || 'ecmwf';
 
     radarOverlay = radarOverlay || getState(`${statePrefix}.selectedOverlay`).val || 'rain';
 
     const getUrl = params => {
         let partDefaults = {
+            // Localization is not supported wia query params (https://community.windy.com/topic/3493/url-for-widget-forecast-with-language?_=1602973997770)
             // usedLang: 'it', lang: 'it', usedlang: 'it', lan: 'it', language: 'it', defaultLang: 'it', prefLang: 'it', seoLang: 'it', userLang: 'it',
+            // Should pass the 'Accept-language' header to the iframe source
+            // https://stackoverflow.com/questions/17694807/how-to-set-custom-http-headers-when-changing-iframe-src
+
             lat: latitude,
             lon: longitude,
             //detailLat: latitude-0.1,
@@ -118,7 +174,7 @@ function updateRadarUrls(radarOverlay = null) {
             zoom: 11,
             level: 'surface',
             overlay: radarOverlay,
-            product: 'nems', // For Europe the local model is better, otherwyse use for global 'ecmwf',
+            product: model,
             menu: 'false', //'false',
             message: '',
             marker: '',
@@ -140,36 +196,166 @@ function updateRadarUrls(radarOverlay = null) {
         return 'https://embed.windy.com/embed2.html?' + parts.join('&');
     };
 
+    setState(`${statePrefix}.detailUrl`, getUrl({marker: 'true'}), true);
+    setState(`${statePrefix}.countryUrl`, getUrl(countryParams), true);
+    setState(`${statePrefix}.continentUrl`, getUrl(continentParams), true);
+}
+
+function setViewTranslations() {
     setState(
-        `${statePrefix}.detailUrl`, 
-        getUrl({
-            marker: 'true'
-        }),
-        true
-    );
-    setState( // Make configurable
-        `${statePrefix}.countryUrl`, 
-        getUrl({
-            lat: 46.808,
-            lon: 8.262,
-            zoom: 7
-        }),
-        true
-    );
-    setState( // Make configurable
-        `${statePrefix}.continentUrl`, 
-        getUrl({
-            lat: 46.808,
-            lon: 8.262,
-            zoom: 4
-        }),
+        `${statePrefix}.translations`,
+        JSON.stringify([
+            'View',
+            'Secondary views',
+            'Pressure lines (isobars)',
+            'Forecast model'
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
         true
     );
 }
 
+function translate(enText) {
+    const map = { // For translations used https://translator.iobroker.in (that uses Google translator)
+        // View translations
+        "View": {
+            "de": "Aussicht",
+            "ru": "Посмотреть",
+            "pt": "Visão",
+            "nl": "Visie",
+            "fr": "Vue",
+            "it": "Vista",
+            "es": "Ver",
+            "pl": "Widok",
+            "zh-cn": "视图"
+        },
+        "Secondary views": {
+            "en": "Secondary views",
+            "de": "Sekundäransichten",
+            "ru": "Вторичные просмотры",
+            "pt": "Vistas secundárias",
+            "nl": "Secundaire weergaven",
+            "fr": "Vues secondaires",
+            "it": "Viste secondarie",
+            "es": "Vistas secundarias",
+            "pl": "Widoki wtórne",
+            "zh-cn": "次要观点"
+        },
+        "Pressure lines (isobars)": {
+            "de": "Druckleitungen (Isobaren)",
+            "ru": "Напорные трубопроводы (изобары)",
+            "pt": "Linhas de pressão (isobars)",
+            "nl": "Druklijnen (isobaren)",
+            "fr": "Conduites de pression (isobares)",
+            "it": "Linee di pressione (isobare)",
+            "es": "Líneas de presión (isobaras)",
+            "pl": "Linie ciśnieniowe (izobary)",
+            "zh-cn": "压力线（等压线）"
+        },
+        "Forecast model": {
+            "de": "Prognosemodell",
+            "ru": "Модель прогноза",
+            "pt": "Modelo de previsão",
+            "nl": "Voorspellingsmodel",
+            "fr": "Modèle de prévision",
+            "it": "Modello previsionale",
+            "es": "Modelo de pronóstico",
+            "pl": "Model prognozowania",
+            "zh-cn": "预测模型"
+        },
+        // Model descriptions
+        "(Global, resolution ~9 km) ECMWF (European Centre for Medium-Range Weather Forecasts) www.ecmwf.com": {
+            "de": "(Global, Auflösung ~ 9 km) EZMW (Europäisches Zentrum für mittelfristige Wettervorhersage) www.ecmwf.com",
+            "ru": "(Глобальный, разрешение ~ 9 км) ECMWF (Европейский центр среднесрочных прогнозов погоды) www.ecmwf.com",
+            "pt": "(Global, resolução de ~ 9 km) ECMWF (Centro Europeu de Previsões Meteorológicas de Médio Prazo) www.ecmwf.com",
+            "nl": "(Wereldwijd, resolutie ~ 9 km) ECMWF (Europees centrum voor weersvoorspellingen op middellange termijn) www.ecmwf.com",
+            "fr": "(Global, résolution ~ 9 km) ECMWF (Centre européen pour les prévisions météorologiques à moyen terme) www.ecmwf.com",
+            "it": "(Globale, risoluzione ~ 9 km) ECMWF (Centro europeo per le previsioni meteorologiche a medio termine) www.ecmwf.com",
+            "es": "(Global, resolución ~ 9 km) ECMWF (Centro europeo de previsión meteorológica a medio plazo) www.ecmwf.com",
+            "pl": "(Globalny, rozdzielczość ~ 9 km) ECMWF (Europejskie Centrum Prognoz Średnioterminowych) www.ecmwf.com",
+            "zh-cn": "（全球，分辨率约9公里）ECMWF（欧洲中距离天气预报中心）www.ecmwf.com"
+        },
+        "(Global, resolution ~22 km) GFS (Global Forecast System) - United States national weather service (NWS)": {
+            "de": "(Global, Auflösung ~ 22 km) GFS (Global Forecast System) - Nationaler Wetterdienst der Vereinigten Staaten (NWS)",
+            "ru": "(Глобальная, разрешение ~ 22 км) GFS (Global Forecast System) - Национальная метеорологическая служба США (NWS)",
+            "pt": "(Global, resolução de aproximadamente 22 km) GFS (Sistema de previsão global) - serviço meteorológico nacional dos Estados Unidos (NWS)",
+            "nl": "(Wereldwijd, resolutie ~ 22 km) GFS (Global Forecast System) - Nationale weerdienst van de Verenigde Staten (NWS)",
+            "fr": "(Global, résolution ~ 22 km) GFS (Global Forecast System) - Service météorologique national des États-Unis (NWS)",
+            "it": "(Globale, risoluzione ~ 22 km) GFS (Global Forecast System) - Servizio meteorologico nazionale degli Stati Uniti (NWS)",
+            "es": "(Global, resolución ~ 22 km) GFS (Global Forecast System) - Servicio meteorológico nacional de los Estados Unidos (NWS)",
+            "pl": "(Globalny, rozdzielczość ~ 22 km) GFS (Global Forecast System) - Krajowa służba meteorologiczna Stanów Zjednoczonych (NWS)",
+            "zh-cn": "（全球，分辨率约22 km）GFS（全球预报系统）-美国国家气象局（NWS）"
+        },
+        "(western Europe, resolution 1,25 km) AROME - French Weather Service (Météo-France)": {
+            "de": "(Westeuropa, Auflösung 1,25 km) AROME - Französischer Wetterdienst (Météo-France)",
+            "ru": "(Западная Европа, разрешение 1,25 км) AROME - Французская метеорологическая служба (Метео-Франс)",
+            "pt": "(Europa Ocidental, resolução de 1,25 km) AROME - French Weather Service (Météo-France)",
+            "nl": "(West-Europa, resolutie 1,25 km) AROME - Franse weerdienst (Météo-France)",
+            "fr": "(Europe de l'Ouest, résolution 1,25 km) AROME - Service météorologique français (Météo-France)",
+            "it": "(Europa occidentale, risoluzione 1,25 km) AROME - Servizio meteorologico francese (Météo-France)",
+            "es": "(Europa occidental, resolución 1,25 km) AROME - Servicio meteorológico francés (Météo-France)",
+            "pl": "(Europa zachodnia, rozdzielczość 1,25 km) AROME - French Weather Service (Météo-France)",
+            "zh-cn": "（西欧，分辨率为1.25公里）AROME-法国气象局（法国巴黎）"
+        },
+        "(Europe, resolution ~4 km) NEMS - Swiss company Meteoblue.com": {
+            "de": "(Europa, Auflösung ~ 4 km) NEMS - Schweizer Firma Meteoblue.com",
+            "ru": "(Европа, разрешение ~ 4 км) NEMS - швейцарская компания Meteoblue.com",
+            "pt": "(Europa, resolução de ~ 4 km) NEMS - empresa suíça Meteoblue.com",
+            "nl": "(Europa, resolutie ~ 4 km) NEMS - Zwitsers bedrijf Meteoblue.com",
+            "fr": "(Europe, résolution ~ 4 km) NEMS - Société suisse Meteoblue.com",
+            "it": "(Europa, risoluzione ~ 4 km) NEMS - Società svizzera Meteoblue.com",
+            "es": "(Europa, resolución ~ 4 km) NEMS - Compañía suiza Meteoblue.com",
+            "pl": "(Europa, rozdzielczość ~ 4 km) NEMS - szwajcarska firma Meteoblue.com",
+            "zh-cn": "（欧洲，分辨率约4公里）NEMS-瑞士Meteoblue.com公司"
+        },
+        "(Europe, resolution ~7 km) ICON-EU - German Weather Service (DWD)": {
+            "de": "(Europa, Auflösung ~ 7 km) ICON-EU - Deutscher Wetterdienst (DWD)",
+            "ru": "(Европа, разрешение ~ 7 км) ICON-EU - Метеорологическая служба Германии (DWD)",
+            "pt": "(Europa, resolução de ~ 7 km) ICON-EU - German Weather Service (DWD)",
+            "nl": "(Europa, resolutie ~ 7 km) ICON-EU - Duitse weerdienst (DWD)",
+            "fr": "(Europe, résolution ~ 7 km) ICON-EU - Service météorologique allemand (DWD)",
+            "it": "(Europa, risoluzione ~ 7 km) ICON-EU - Servizio metereologico tedesco (DWD)",
+            "es": "(Europa, resolución ~ 7 km) ICON-EU - Servicio meteorológico alemán (DWD)",
+            "pl": "(Europa, rozdzielczość ~ 7 km) ICON-EU - German Weather Service (DWD)",
+            "zh-cn": "（欧洲，分辨率约为7公里）ICON-EU-德国气象局（DWD）"
+        },
+        "(continental US, resolution ~5 km) NAM CONUS - North American Mesoscale Forecast System (NAM)": {
+            "de": "(Kontinentale USA, Auflösung ~ 5 km) NAM CONUS - Nordamerikanisches Mesoscale Forecast System (NAM)",
+            "ru": "(континентальная часть США, разрешение ~ 5 км) NAM CONUS - Североамериканская система мезомасштабных прогнозов (NAM)",
+            "pt": "(EUA continental, resolução de ~ 5 km) NAM CONUS - Sistema de Previsão de Mesoescala da América do Norte (NAM)",
+            "nl": "(continentale VS, resolutie ~ 5 km) NAM CONUS - Noord-Amerikaans Mesoscale Forecast System (NAM)",
+            "fr": "(États-Unis continentaux, résolution ~ 5 km) NAM CONUS - North American Mesoscale Forecast System (NAM)",
+            "it": "(Stati Uniti continentali, risoluzione ~ 5 km) NAM CONUS - Sistema di previsione mesoscala nordamericano (NAM)",
+            "es": "(EE.UU. continental, resolución ~ 5 km) NAM CONUS - Sistema de pronóstico de mesoescala de América del Norte (NAM)",
+            "pl": "(kontynentalne Stany Zjednoczone, rozdzielczość ~ 5 km) NAM CONUS - North American Mesoscale Forecast System (NAM)",
+            "zh-cn": "（美国大陆，分辨率〜5 km）NAM CONUS-北美中尺度预报系统（NAM）"
+        },
+        "(Alaska, resolution ~6 km) NAM Alaska - North American Mesoscale Forecast System (NAM)": {
+            "de": "(Alaska, Auflösung ~ 6 km) NAM Alaska - Nordamerikanisches Mesoscale Forecast System (NAM)",
+            "ru": "(Аляска, разрешение ~ 6 км) NAM Alaska - Североамериканская система мезомасштабных прогнозов (NAM)",
+            "pt": "(Alasca, resolução de aproximadamente 6 km) NAM Alasca - Sistema de previsão de mesoescala da América do Norte (NAM)",
+            "nl": "(Alaska, resolutie ~ 6 km) NAM Alaska - North American Mesoscale Forecast System (NAM)",
+            "fr": "(Alaska, résolution ~ 6 km) NAM Alaska - North American Mesoscale Forecast System (NAM)",
+            "it": "(Alaska, risoluzione ~ 6 km) NAM Alaska - Sistema di previsione mesoscala nordamericano (NAM)",
+            "es": "(Alaska, resolución ~ 6 km) NAM Alaska - Sistema de pronóstico de mesoescala de América del Norte (NAM)",
+            "pl": "(Alaska, rozdzielczość ~ 6 km) NAM Alaska - North American Mesoscale Forecast System (NAM)",
+            "zh-cn": "（阿拉斯加，分辨率〜6 km）NAM阿拉斯加-北美中尺度预报系统（NAM）"
+        },
+        "(Hawaii, resolution ~3 km) NAM Hawaii - North American Mesoscale Forecast System (NAM)": {
+            "de": "(Hawaii, Auflösung ~ 3 km) NAM Hawaii - Nordamerikanisches Mesoscale Forecast System (NAM)",
+            "ru": "(Гавайи, разрешение ~ 3 км) NAM Hawaii - Североамериканская мезомасштабная система прогнозирования (NAM)",
+            "pt": "(Havaí, resolução de ~ 3 km) NAM Havaí - Sistema de Previsão de Mesoescala da América do Norte (NAM)",
+            "nl": "(Hawaii, resolutie ~ 3 km) NAM Hawaii - North American Mesoscale Forecast System (NAM)",
+            "fr": "(Hawaii, résolution ~ 3 km) NAM Hawaï - Système de prévision à méso-échelle nord-américain (NAM)",
+            "it": "(Hawaii, risoluzione ~ 3 km) NAM Hawaii - Sistema di previsione mesoscala nordamericano (NAM)",
+            "es": "(Hawái, resolución ~ 3 km) NAM Hawái - Sistema de pronóstico de mesoescala de América del Norte (NAM)",
+            "pl": "(Hawaje, rozdzielczość ~ 3 km) NAM Hawaje - North American Mesoscale Forecast System (NAM)",
+            "zh-cn": "（夏威夷，分辨率〜3 km）夏威夷NAM-北美中尺度预报系统（NAM）"
+        }
+    }
+    return (map[enText] || {})[getLocale()] || enText;
+}
 
-
-function translate(label) {
+function getWindyLabel(label) {
     const map = { // Got directly from https://www.windy.com/v/19.10.3.emb.985a/lang/{locale}.js
         en: {"MON":"Monday","TUE":"Tuesday","WED":"Wednesday","THU":"Thursday","FRI":"Friday","SAT":"Saturday","SUN":"Sunday","MON2":"Mon","TUE2":"Tue","WED2":"Wed","THU2":"Thu","FRI2":"Fri","SAT2":"Sat","SUN2":"Sun","SMON01":"Jan","SMON02":"Feb","SMON03":"Mar","SMON04":"Apr","SMON05":"May","SMON06":"Jun","SMON07":"Jul","SMON08":"Aug","SMON09":"Sep","SMON10":"Oct","SMON11":"Nov","SMON12":"Dec","TODAY":"Today","TOMORROW":"Tomorrow","LATER":"Later","ALL":"All","HOURS_SHORT":"hrs","FOLLOW":"Follow us","EMBED":"Embed widget on page","MENU":"Menu","MENU_SETTINGS":"Settings","MENU_HELP":"Help","MENU_ABOUT":"About us","MENU_LOCATION":"Find my location","MENU_FULLSCREEN":"Fullscreen mode","MENU_DISTANCE":"Distance & planning","MENU_HISTORICAL":"Show historical data","MENU_MOBILE":"Download App","MENU_FAVS":"Favorites","MENU_FEEDBACK":"Feedback","SHOW_PICKER":"Show weather picker","TOOLBOX_INFO":"info","TOOLBOX_ANIMATION":"animation","TOOLBOX_START":"Hide/show animated particles","MENU_F_MODEL":"Data","MENU_U_INTERVAL":"Update interval","MENU_D_UPDATED":"Updated","MENU_D_REFTIME":"Reference time","MENU_D_NEXT_UPDATE":"Next update expected at:","ABOUT_OVERLAY":"About","ABOUT_DATA":"About these data","OVERLAY":"Layer","MODEL":"Forecast model","WIND":"Wind","GUST":"Wind gusts","GUSTACCU":"Wind accumulation","WIND_DIR":"Wind dir.","TEMP":"Temperature","PRESS":"Pressure","CLOUDS":"Clouds, rain","CLOUDS2":"Clouds","CLOUD_ALT":"Cloud base","RADAR":"Weather radar","RADAR_BLITZ":"Radar, lightning","TOTAL_CLOUDS":"Total clouds","LOW_CLOUDS":"Low clouds","MEDIUM_CLOUDS":"Medium clouds","HIGH_CLOUDS":"High clouds","CAPE":"CAPE Index","RAIN":"Rain, snow","RAIN_THUNDER":"Rain, thunder","RAIN3H":"Precip. past 3h","JUST_RAIN":"Rain","CONVECTIVE_RAIN":"Convective r.","RAINRATE":"Max. rain rate","LIGHT_THUNDER":"Light thunder","THUNDER":"Thunderstorms","HEAVY_THUNDER":"Heavy thunder","SNOW":"Snow","OZONE":"Ozone layer","SHOW_GUST":"force of wind gusts","RH":"Humidity","WAVES":"Waves","WAVES2":"Waves, sea","SWELL":"Swell","SWELL1":"Swell 1","SWELL2":"Swell 2","SWELL3":"Swell 3","WWAVES":"Wind waves","ALL_WAVES":"All waves","SWELLPER":"Swell period","RACCU":"Rain accumulation","SACCU":"Snow accumulation","ACCU":"Accumulations","RAINACCU":"RAIN ACCUMULATION","SNOWACCU":"SNOW ACCUMULATION","SNOWCOVER":"Actual Snow Cover","SST":"Surface sea temperature","SST2":"Sea temperature","CURRENT":"Currents","VISIBILITY":"Visibility","ACTUAL_TEMP":"Actual temperature","SSTAVG":"Average sea temperature","AVAIL_FOR":"Available for:","DEW_POINT":"Dew point","SLP":"Pressure (sea l.)","QFE":"Station pressure","SNOWDEPTH":"Snow depth","NEWSNOW":"New snow","SNOWDENSITY":"Snow density","GH":"Geopot. height","FLIGHT_RULES":"Flight rules","CTOP":"Cloud tops","FREEZING":"Freezing altitude","COSC":"CO concentration","SO2SM":"SO2 mass","DUSTSM":"Dust mass","WX_WARNINGS":"Weather warnings","PTYPE":"Precip. type","FOG":"Fog","FLOOD":"Flood","FIRE":"Fire","FZ_RAIN":"Freezing rain","MX_ICE":"Mixed ice","WET_SN":"Wet snow","RA_SN":"Rain with snow","PELLETS":"Ice pellets","HAIL":"Hail","MORE_LAYERS":"More layers...","NONE":"None","ACC_LAST_DAYS":"Last {{num}} days","ACC_LAST_HOURS":"Last {{num}} hours","ACC_NEXT_DAYS":"Next {{num}} days","ACC_NEXT_HOURS":"Next {{num}} hours","ALTITUDE":"Altitude","SFC":"Surface","CLICK_ON_LEGEND":"Click to change units","ALTERNATIVE_UNIT_CHANGE":"Any Layer unit can be changed by clicking on color legend","COPY_TO_C":"Copy to clipboard","SEARCH":"Search location...","JUST_SEARCH":"Search","NEXT":"Next results...","LOW_PREDICT":"Low predictability of forecast","DAYS_AGO":"{{daysago}} days ago:","SHOW_ACTUAL":"Show actual forecast","SHARE":"Share","SHARE_FCST":"Share forecast","SHARE_LINK":"Share link","JUST_EMBED":"Embed","POSITION":"Position","WIDTH":"Width","HEIGHT":"Height","DEFAULT_UNITS":"Default units","NOW":"Now","FORECAST_FOR":"Forecast for","ZOOM_LEVEL":"Zoom level","EXPERT_MODE":"Expert mode","EXPERT_MODE_DESC":" Do not fold overlays in quick menu","DETAILED":"Detailed forecast for this location","PERIOD":"Period","DRAG_ME":"Drag me if you want","D_FCST":"Forecast for this location","D_WEBCAMS":"Webcams in vicinity","D_STATIONS":"Nearest weather stations","D_NO_WEBCAMS":"There are no webcams around this location (or we don't know about them)","D_DAYLIGHT":"image during daylight","D_DISTANCE":"distance","D_MILES":"miles","D_MORE_THAN_HOUR":"more than hour ago","D_MIN_AGO":"{{duration}} minutes ago","D_SUNRISE":"Sunrise","D_SUNSET":"sunset","D_DUSK":"dusk","D_SUN_NEVER_SET":"Sun never set","D_POLAR_NIGHT":"Polar night","D_LT2":"local time","D_FAVORITES":"Add to Favorites","D_FAVORITES2":"Remove from Favorites","D_WAVE_FCST2":"Waves and sea","D_MISSING_CAM":"Add new webcam","D_HOURS":"Hours","D_TEMP2":"Temp.","D_PRECI":"Precit.","D_ABOUT_LOC":"About this location","D_ABOUT_LOC2":"About location","D_TIMEZONE":"Timezone","D_WEBCAMS_24":"Show last 24 hours","D_FORECAST_FOR":"{{duration}} days forecast","E_MESSAGE":"Awesome weather forecast at","METAR_VAR":"Variable","METAR_MIN_AGO":"{DURATION}m ago","METAR_HOURS_AGO":"{DURATION}h ago","METARS_H_M_AGO":"{DURATION}h {DURATIONM}m ago","METARS_DAYS_AGO":"{DURATION} days ago","DEVELOPED":"Developed with","FAVS_DELETE":"delete","SHOW_ON_MAP":"Display on map","POI_STATIONS":"Weather stations","POI_AD":"Airports","POI_CAMS":"Webcams","POI_PG":"Paragliding spots","POI_KITE":"Kite/WS spots","POI_SURF":"Surfing spots","POI_EMPTY":"Empty map","POI_WIND":"Reported wind","POI_TEMP":"Reported temp.","POI_FAVS":"My favourites","POI_FCST":"Forecasted weather","POI_TIDE":"Tide forecast","P_ANDROID_APP":"Windy for Android, free on Google Play","ND_MODEL":"Forecast model","ND_COMPARE":"Compare forecasts","ND_DISPLAY":"Display","ND_DISPLAY_BASIC":"Basic","S_ADVANCED_SETTINGS":"Advanced settings","S_COLORS":"Customize color scale","S_SAVE":"Save","S_SAVE2":"Login/Register to save all your settings to the cloud","S_SAVE_AUTO":"Your settings are saved to the cloud","S_SPEED":"Speed","S_ADD_OVERLAYS":"Show / add more layers","S_OVR_QUICK":"Add to quick menu","U_LOGIN":"Login","U_LOGOUT":"Logout","U_PROFILE":"My profile","U_PASSWD":"Change password","U_CHANGE_PIC":"Change my picture","OVR_RECOMENDED":"Recommended for:","OVR_ALL":"All","OVR_FLYING":"Flying","OVR_WATER":"Water","OVR_SKI":"Ski","MSG_OFFLINE":"WOW it appears that you are offline :-(","MSG_ONLINE_APP":"Online again, click here to reload app :-)","MSG_LOGIN_SUCCESFULL":"You have successfully logged in!","FORGOT_PASSWORD":"Forgot Password?","USERNAME_EMAIL":"Username / Email","DONT_HAVE_ACCOUNT":"Don't have an account?","REGISTER_HERE":"register here","PASSWD":"Password","LOGIN":"Login","LOGIN_FAILED":"Login Unsuccessful","ALERTS_PROMO":"Never miss a BIG day.","ALERTS_LINK":"Set-up Windy Alert for this spot.","ALERTS_LINK_SHORT":"Alert for this spot","MY_ALERTS":"My Alerts","DIRECTION_N":"N","DIRECTION_NE":"NE","DIRECTION_E":"E","DIRECTION_SE":"SE","DIRECTION_S":"S","DIRECTION_SW":"SW","DIRECTION_W":"W","DIRECTION_NW":"NW","DIRECTIONS":"Directions","DIRECTIONS_ANY":"Any direction","ACTIVATE":"Activate","DEACTIVATE":"Deactivate","REGISTER":"Register","JUST_LOGIN":"Login","MY_ACCOUNT":"My account","EDIT_ALERT":"Edit alert","FAVS_RENAME":"Rename","ADD_ALERT":"Create alert","HOME":"Home","MAP":"Map","MORE":"More","LESS":"Less","COMPARE":"Compare","PRESS_ISOLINES":"Pressure isolines","PART_ANIMATION":"Particles animation","R_TIME_RANGE":"Time range","MY_LOCATION":"My location","D_ISOLINES":"Display isolines","DONATE":"Donate","ARTICLES":"Articles","NEW":"New!","WHAT_IS_NEW":"What is new:","PRIVACY":"Privacy protection","SOUNDING":"Sounding","SOUND_ON":"Sound","BLITZ_ON":"Show lightnings","WFORECAST":"weather forecast","TITLE":"Wind map & weather forecast","HURR_TRACKER":"Hurricane tracker","TOC":"Terms and conditions","SEND":"Send","SEARCH_LAYER":"Search layer...","CANCEL_SEARCH":"Cancel search","NOT_FOUND":"Nothing to be found","P_LOGIN_SYNC":"Please <b>login</b> or <b>register</b> to synchrinize all your favourites and settings with all your devices.","P_LOGIN_CLOUD":"Please <b>login</b> or <b>register</b> to backup all your favourites and settings to the cloud.","P_LOCATION":"Please allow Windy to use location services (GPS) while using the app, so we can show weather at your location. We do not store your location at our servers.","DONE":"Done"},
         de: {"MON":"Montag","TUE":"Dienstag","WED":"Mittwoch","THU":"Donnerstag","FRI":"Freitag","SAT":"Samstag","SUN":"Sonntag","MON2":"Mo","TUE2":"Di","WED2":"Mi","THU2":"Do","FRI2":"Fr","SAT2":"Sa","SUN2":"So","SMON01":"Jan","SMON02":"Feb","SMON03":"Mär","SMON04":"Apr","SMON05":"Mai","SMON06":"Jun","SMON07":"Jul","SMON08":"Aug","SMON09":"Sep","SMON10":"Okt","SMON11":"Nov","SMON12":"Dez","TODAY":"Heute","TOMORROW":"Morgen","LATER":"Später","ALL":"Alle","HOURS_SHORT":"Std","FOLLOW":"Folgen","EMBED":"Widget auf Seite einbetten","MENU":"Menü","MENU_SETTINGS":"Einstellungen","MENU_HELP":"Hilfe","MENU_ABOUT":"Über uns","MENU_LOCATION":"Meinen Standort finden","MENU_FULLSCREEN":"Vollbildmodus","MENU_DISTANCE":"Entfernung  & Planung","MENU_HISTORICAL":"Verlaufsdaten anzeigen","MENU_MOBILE":"App herunterladen","MENU_FAVS":"Favoriten","MENU_FEEDBACK":"Feedback","SHOW_PICKER":"Wettersuche anzeigen","TOOLBOX_INFO":"Info","TOOLBOX_ANIMATION":"Animation","TOOLBOX_START":"Animierte Partikel anzeigen/ausblenden","MENU_F_MODEL":"Daten","MENU_U_INTERVAL":"Aktualisierungsintervall","MENU_D_UPDATED":"Aktualisiert","MENU_D_REFTIME":"Referenzzeit","MENU_D_NEXT_UPDATE":"Nächstes Update wird erwartet um:","ABOUT_OVERLAY":"Über","ABOUT_DATA":"Über diese Daten","OVERLAY":"Ebene","MODEL":"Vorhersagemodell","WIND":"Wind","GUST":"Windböen","GUSTACCU":"Wind Summierung ","WIND_DIR":"Windrichtung","TEMP":"Temperatur","PRESS":"Druck","CLOUDS":"Wolken, Regen","CLOUDS2":"Wolken","CLOUD_ALT":"Wolkengrenze","RADAR":"Wetterradar","RADAR_BLITZ":"Radar und Blitze","TOTAL_CLOUDS":"Alle Wolken","LOW_CLOUDS":"Niedrige Wolken","MEDIUM_CLOUDS":"Mittlere Wolken","HIGH_CLOUDS":"Hohe Wolken","CAPE":"CAPE-Index","RAIN":"Regen, Schnee","RAIN_THUNDER":"Regen, Gewitter","RAIN3H":"NS der letzten 3 Std.","JUST_RAIN":"Regen","CONVECTIVE_RAIN":"Konvekt. Regen","RAINRATE":"Max. Regenfallrate","LIGHT_THUNDER":"Leichtes Gewitter","THUNDER":"Gewitter","HEAVY_THUNDER":"Starkes Gewitter","SNOW":"Schnee","OZONE":"Ozonschicht","SHOW_GUST":"Stärke der Windböen","RH":"Feuchtigkeit","WAVES":"Wellen","WAVES2":"Wellen, Meer","SWELL":"Seegang","SWELL1":"Seegang 1","SWELL2":"Seegang 2","SWELL3":"Seegang 3","WWAVES":"Windwellen","ALL_WAVES":"Alle Wellen","SWELLPER":"Seegangzeit","RACCU":"Regenmenge","SACCU":"Schneemenge","ACCU":"Ansammlungen","RAINACCU":"REGENMENGE","SNOWACCU":"SCHNEEMENGE","SNOWCOVER":"Tats. Schneedecke","SST":"Meerestemperatur a. Oberfl.","SST2":"Meerestemperatur","CURRENT":"Strömungen","VISIBILITY":"Sichtweite","ACTUAL_TEMP":"Momentane Temperatur","SSTAVG":"Durchs. Meerestemperatur","AVAIL_FOR":"Verfügbar für:","DEW_POINT":"Taupunkt","SLP":"Druck (NN)","QFE":"Druck (Wetterstation)","SNOWDEPTH":"Schneehöhe","NEWSNOW":"Neuschnee","SNOWDENSITY":"Schneedichte","GH":"Geopot. Höhe","FLIGHT_RULES":"Flugregeln","CTOP":"Wolkenobergrenze","FREEZING":"Frostgrenze","COSC":"CO-Gehalt","SO2SM":"SO2-Gehalt","DUSTSM":"Staubgehalt","WX_WARNINGS":"Wetterwarnungen","PTYPE":"Niederschlagsart","FOG":"Nebel","FLOOD":"Flut","FIRE":"Feuer","FZ_RAIN":"Gefrierender Regen","MX_ICE":"Mischeis","WET_SN":"Nasser Schnee","RA_SN":"Regen mit vereinz. Schnee","PELLETS":"Graupel","HAIL":"Hagel","MORE_LAYERS":"Mehr Ebenen...","NONE":"Keine","ACC_LAST_DAYS":"Letzte {{num}} Tage","ACC_LAST_HOURS":"Letzte {{num}} Std.","ACC_NEXT_DAYS":"Nächste {{num}} Tage","ACC_NEXT_HOURS":"Nächste {{num}} Std.","ALTITUDE":"Höhe","SFC":"Boden","CLICK_ON_LEGEND":"Zum Ändern der Einheiten klicken","ALTERNATIVE_UNIT_CHANGE":"Jede Ebeneneinheit kann über die Farblegende geändert werden.","COPY_TO_C":"In Zwischenablage kopieren","SEARCH":"Ort suchen...","JUST_SEARCH":"Suchen","NEXT":"Nächste Ergebnisse...","LOW_PREDICT":"Geringe Vorhersage Güte","DAYS_AGO":"Vor {{daysago}} Tagen:","SHOW_ACTUAL":"Aktuelle Vorhersage anzeigen","SHARE":"Teilen","SHARE_FCST":"Vorhersage teilen","SHARE_LINK":"Link teilen","JUST_EMBED":"Einbetten","POSITION":"Position","WIDTH":"Breite","HEIGHT":"Höhe","DEFAULT_UNITS":"Standardeinheiten","NOW":"Jetzt","FORECAST_FOR":"Vorhersage für","ZOOM_LEVEL":"Zoomstufe","EXPERT_MODE":"Expertenmodus","EXPERT_MODE_DESC":" Ebenen im Schnellmenü nicht minimieren","DETAILED":"Detaillierte Vorhersage für diesen Ort","PERIOD":"Zeitraum","DRAG_ME":"Bei Bedarf ziehen","D_FCST":"Vorhersage für diesen Ort","D_WEBCAMS":"Webcams in der Nähe","D_STATIONS":"Wetterstationen i. d. Nähe","D_NO_WEBCAMS":"In der Nähe dieses Standorts befinden sich keine Wetterstationen (oder wir kennen sie nicht).","D_DAYLIGHT":"Bild bei Tageslicht","D_DISTANCE":"Entfernung","D_MILES":"Meilen","D_MORE_THAN_HOUR":"vor mehr als 1 Stunde","D_MIN_AGO":"vor {{duration}} Minuten","D_SUNRISE":"Sonnenaufgang","D_SUNSET":"Sonnenuntergang","D_DUSK":"Dämmerung","D_SUN_NEVER_SET":"Kein Sonnenuntergang","D_POLAR_NIGHT":"Polarnacht","D_LT2":"Ortszeit","D_FAVORITES":"Zu Favoriten hzfg.","D_FAVORITES2":"Von Favoriten entfernen","D_WAVE_FCST2":"Wellen und Meer","D_MISSING_CAM":"Neue Webcam hzfg.","D_HOURS":"Stunden","D_TEMP2":"Temp.","D_PRECI":"Niederschlag","D_ABOUT_LOC":"Infos zum Ort","D_ABOUT_LOC2":"Infos zum Ort","D_TIMEZONE":"Zeitzone","D_WEBCAMS_24":"Letzte 24 Std. zeigen","D_FORECAST_FOR":"{{duration}}-Tage-Vorhersage","D_SWIPE_FOR_CAMS":"Für Webcams i.d. Nähe nach oben wischen","E_MESSAGE":"Gute Wettervorhersage bei","METAR_VAR":"Variable","METAR_MIN_AGO":"vor {DURATION} Min.","METAR_HOURS_AGO":"vor {DURATION} Std.","METARS_H_M_AGO":"vor {DURATION}h {DURATIONM}m","METARS_DAYS_AGO":"Vor {DURATION} Tagen","DEVELOPED":"Entwickelt von","FAVS_DELETE":"Löschen","SHOW_ON_MAP":"Auf Karte anzeigen","POI_STATIONS":"Wetterstationen","POI_AD":"Flughäfen","POI_CAMS":"Webcams","POI_PG":"Gleitschirmplätze","POI_KITE":"Kite-/Windsurf Orte","POI_SURF":"Surf Orte","POI_EMPTY":"Leere Karte","POI_WIND":"Gemeldeter Wind","POI_TEMP":"Gemeldete Temp.","POI_FAVS":"Meine Favoriten","POI_FCST":"Vorhergesagtes Wetter","POI_TIDE":"Gezeitenvorhersage","P_ANDROID_APP":"Windy für Android, gratis auf Google Play","ND_MODEL":"Vorhersagemodell","ND_COMPARE":"Vorhersagen vergleichen","ND_DISPLAY":"Anzeigen","ND_DISPLAY_BASIC":"Basisdaten","S_ADVANCED_SETTINGS":"Erweiterte Einstellungen","S_COLORS":"Ebenenfarben ändern","S_SAVE":"Speichern","S_SAVE2":"Melden Sie sich an, um Ihre Einstellungen in der Cloud zu speichern.","S_SAVE_AUTO":"Ihre Einstellungen wurden in der Cloud gespeichert.","S_SPEED":"Geschwindigkeit","S_ADD_OVERLAYS":"Mehr Ebenen anzeigen/hzfg.","S_OVR_QUICK":"Zum Schnellmenü hzfg.","U_LOGIN":"Anmelden","U_LOGOUT":"Abmelden","U_PROFILE":"Mein Profil","U_PASSWD":"Passwort ändern","U_CHANGE_PIC":"Bild ändern","OVR_RECOMENDED":"Empfohlen für:","OVR_ALL":"Alle","OVR_FLYING":"Flug","OVR_WATER":"Wasser","OVR_SKI":"Ski","MSG_OFFLINE":"Anscheinend sind Sie offline. :-(","MSG_ONLINE_APP":"Wieder online. Zum Aktualisieren klicken. :-)","MSG_LOGIN_SUCCESFULL":"Sie haben sich erfolgreich angemeldet!","FORGOT_PASSWORD":"Passwort vergessen?","USERNAME_EMAIL":"Benutzername/E-Mail-Adr.","DONT_HAVE_ACCOUNT":"Noch nicht registriert?","REGISTER_HERE":"Hier registrieren","PASSWD":"Passwort","LOGIN":"Anmelden","LOGIN_FAILED":"Fehler bei Anmeldung","ALERTS_PROMO":"Verpassen Sie keinen guten Tag mehr!","ALERTS_LINK":"Richten Sie einen Windy-Alarm für diesen Ort ein.","ALERTS_LINK_SHORT":"Alarm für diesen Ort","MY_ALERTS":"Meine Alarme","DIRECTION_N":"N","DIRECTION_NE":"NO","DIRECTION_E":"O","DIRECTION_SE":"SO","DIRECTION_S":"S","DIRECTION_SW":"SW","DIRECTION_W":"W","DIRECTION_NW":"NW","DIRECTIONS":"Richtungen","DIRECTIONS_ANY":"Alle Richtungen","ACTIVATE":"Aktivieren","DEACTIVATE":"Deaktivieren","REGISTER":"Registrieren","JUST_LOGIN":"Anmelden","MY_ACCOUNT":"Mein Konto","EDIT_ALERT":"Alarm bearbeiten","FAVS_RENAME":"Umbenennen","ADD_ALERT":"Alarm erstellen","HOME":"Start","MAP":"Karte","MORE":"Mehr","LESS":"Weniger","COMPARE":"Vergleichen","PRESS_ISOLINES":"Isobaren","PART_ANIMATION":"Partikelanimation","R_TIME_RANGE":"Zeitraum","MY_LOCATION":"Mein Ort","D_ISOLINES":"Isolinien anzeigen","DONATE":"Spende","ARTICLES":"Artikel","NEW":"Neu!","WHAT_IS_NEW":"Was gibt's neues ","PRIVACY":"Datenschutz","SOUNDING":"Aerologie","SOUND_ON":"Töne","BLITZ_ON":"Blitze anzeigen","WFORECAST":"Wettervorhersage","TITLE":"Windkarte & Wettervorhersage","HURR_TRACKER":"Wirbelsturm Vorhersage ","TOC":"Geschäftsbedingungen","SEND":"Senden","SEARCH_LAYER":"Suchebene...","CANCEL_SEARCH":"Suche abbrechen","NOT_FOUND":"Nichts zu finden","P_HOME_BUTTON":"Dies ist Ihr Home-Button. Er bringt Sie immer wieder zurück zu Ihrem Home-Bildschirm.","P_LOGIN_SYNC":"Bitte <b>anmelden</b> oder <b>registrieren</b>, um alle Favoriten und Einstellungen mit allen Geräten zu synchronisieren.","P_LOGIN_CLOUD":"Bitte <b>anmelden</b> oder <b>registrieren</b>, um alle Favoriten und Einstellungen in der Cloud zu sichern."},
@@ -183,5 +369,5 @@ function translate(label) {
         'zh-cn': {"MON":"周一","TUE":"周二","WED":"周三","THU":"周四","FRI":"周五","SAT":"周六","SUN":"周日","MON2":"周一","TUE2":"周二","WED2":"周三","THU2":"周四","FRI2":"周五","SAT2":"周六","SUN2":"周日","SMON01":"1月","SMON02":"2月","SMON03":"3月","SMON04":"4月","SMON05":"5月","SMON06":"6月","SMON07":"7月","SMON08":"8月","SMON09":"9月","SMON10":"10月","SMON11":"11月","SMON12":"12月","TODAY":"今天","TOMORROW":"明天","LATER":"以后","ALL":"全部","HOURS_SHORT":"小时","FOLLOW":"关注我们","EMBED":"将小部件嵌入页面","MENU":"菜单","MENU_SETTINGS":"设置","MENU_HELP":"帮助","MENU_ABOUT":"关于我们","MENU_LOCATION":"查找我的位置","MENU_FULLSCREEN":"全屏模式","MENU_DISTANCE":"距离和规划","MENU_HISTORICAL":"显示历史数据","MENU_MOBILE":"下载应用","MENU_FAVS":"收藏夹","MENU_FEEDBACK":"反馈","SHOW_PICKER":"显示天气选择器","TOOLBOX_INFO":"信息","TOOLBOX_ANIMATION":"动画","TOOLBOX_START":"隐藏/显示动画粒子","MENU_F_MODEL":"数据","MENU_U_INTERVAL":"更新间隔","MENU_D_UPDATED":"已上传","MENU_D_REFTIME":"参考时间","MENU_D_NEXT_UPDATE":"预计下次更新时间：","ABOUT_OVERLAY":"关于","ABOUT_DATA":"关于这些数据","OVERLAY":"层","MODEL":"预报模型","WIND":"风","GUST":"阵风","GUSTACCU":"积风","WIND_DIR":"风向","TEMP":"温度","PRESS":"气压","CLOUDS":"云、雨","CLOUDS2":"云","CLOUD_ALT":"云底","RADAR":"天气雷达","RADAR_BLITZ":"雷达，闪电","TOTAL_CLOUDS":"云总量","LOW_CLOUDS":"低云","MEDIUM_CLOUDS":"中云","HIGH_CLOUDS":"高云","CAPE":"CAPE指数","RAIN":"雨、雪","RAIN_THUNDER":"雨、雷","RAIN3H":"过去3小时降水","JUST_RAIN":"雨","CONVECTIVE_RAIN":"对流雨","RAINRATE":"最大降雨率","LIGHT_THUNDER":"轻雷","THUNDER":"雷雨","HEAVY_THUNDER":"重雷","SNOW":"雪","OZONE":"臭氧层","SHOW_GUST":"阵风风力","RH":"湿度","WAVES":"海浪","WAVES2":"海浪","SWELL":"涌浪","SWELL1":"涌浪1","SWELL2":"涌浪2","SWELL3":"涌浪3","WWAVES":"风浪","ALL_WAVES":"所有海浪","SWELLPER":"涌浪周期","RACCU":"积雨","SACCU":"积雪","ACCU":"累积","RAINACCU":"积雨","SNOWACCU":"积雪","SNOWCOVER":"实际积雪","SST":"海表面温度","SST2":"海水温度","CURRENT":"洋流","VISIBILITY":"能见度","ACTUAL_TEMP":"实际温度","SSTAVG":"平均海水温度","AVAIL_FOR":"适用于：","DEW_POINT":"露点","SLP":"气压（海平面）","QFE":"测站气压","SNOWDEPTH":"雪深","NEWSNOW":"初雪","SNOWDENSITY":"雪密度","GH":"位势高度","FLIGHT_RULES":"飞行规则","CTOP":"云顶","FREEZING":"结冰海拔","COSC":"一氧化碳浓度","SO2SM":"二氧化硫质量","DUSTSM":"粉尘质量","WX_WARNINGS":"天气警告","PTYPE":"降水类型","FOG":"雾","FLOOD":"洪水","FIRE":"火灾","FZ_RAIN":"冻雨","MX_ICE":"混合型积冰","WET_SN":"湿雪","RA_SN":"雨夹雪","PELLETS":"冰粒","HAIL":"冰雹","MORE_LAYERS":"更多图层...","NONE":"无","ACC_LAST_DAYS":"最后{{num}}天","ACC_LAST_HOURS":"最后{{num}}小时","ACC_NEXT_DAYS":"接下来{{num}}天","ACC_NEXT_HOURS":"接下来{{num}}小时","ALTITUDE":"海拔","SFC":"地面","CLICK_ON_LEGEND":"点击更改单位","ALTERNATIVE_UNIT_CHANGE":"可以点击颜色图例来更改任何层单位","COPY_TO_C":"复制到剪贴板","SEARCH":"搜索地点...","JUST_SEARCH":"搜索","NEXT":"后续结果...","LOW_PREDICT":"低可预测性","DAYS_AGO":"{{daysago}}天前：","SHOW_ACTUAL":"显示实际预报","SHARE":"分享","SHARE_FCST":"分享预报","SHARE_LINK":"分享链接","JUST_EMBED":"嵌入","POSITION":"位置","WIDTH":"宽度","HEIGHT":"高度","DEFAULT_UNITS":"默认单位","NOW":"现在","FORECAST_FOR":"预报：","ZOOM_LEVEL":"缩放级别","EXPERT_MODE":"专家模式","EXPERT_MODE_DESC":"不要在快捷菜单中折叠叠加层","DETAILED":"该地点的详细预报","PERIOD":"周期","DRAG_ME":"愿意的话，可以拖我","D_FCST":"该地点的预报","D_WEBCAMS":"附近的网络摄像头","D_STATIONS":"最近的气象站","D_NO_WEBCAMS":"该地点附近没有网络摄像头（或者未知）","D_DAYLIGHT":"白天图像","D_DISTANCE":"距离","D_MILES":"英里","D_MORE_THAN_HOUR":"一个多小时前","D_MIN_AGO":"{{duration}}分钟前","D_SUNRISE":"日出","D_SUNSET":"日落","D_DUSK":"黄昏","D_SUN_NEVER_SET":"日不落","D_POLAR_NIGHT":"极地夜","D_LT2":"当地时间","D_FAVORITES":"添加到收藏夹","D_FAVORITES2":"从收藏夹中删除","D_WAVE_FCST2":"风浪和海","D_MISSING_CAM":"添加新的网络摄像头","D_HOURS":"小时","D_TEMP2":"温度","D_PRECI":"降水","D_ABOUT_LOC":"关于此地点","D_ABOUT_LOC2":"关于地点","D_TIMEZONE":"时区","D_WEBCAMS_24":"显示最近24小时","D_FORECAST_FOR":"{{duration}}天预报","D_SWIPE_FOR_CAMS":"向上滑动以调出最近的网络摄像头","E_MESSAGE":"精准的天气预报，就在：","METAR_VAR":"可变","METAR_MIN_AGO":"{DURATION}分钟前","METAR_HOURS_AGO":"{DURATION}小时前","METARS_H_M_AGO":"{DURATION}小时{DURATIONM}分钟前","METARS_DAYS_AGO":"{DURATION} 天前","DEVELOPED":"开发伙伴","FAVS_DELETE":"删除","SHOW_ON_MAP":"在地图上显示","POI_STATIONS":"气象站","POI_AD":"机场","POI_CAMS":"网络摄像头","POI_PG":"滑翔伞运动点","POI_KITE":"风筝/帆板运动点","POI_SURF":"冲浪点","POI_EMPTY":"空地图","POI_WIND":"观察云","POI_TEMP":"报告温度","POI_FAVS":"我的收藏","POI_FCST":"预报天气","POI_TIDE":"潮汐预报","P_ANDROID_APP":"Android版Windy, Google Play免费","ND_MODEL":"预报模型","ND_COMPARE":"比较预报","ND_DISPLAY":"显示","ND_DISPLAY_BASIC":"基础","S_ADVANCED_SETTINGS":"高级设置","S_COLORS":"自定义色层","S_SAVE":"保存","S_SAVE2":"登录/注册以将所有设置保存到云端","S_SAVE_AUTO":"您的设置已保存到云端","S_SPEED":"速度","S_ADD_OVERLAYS":"显示/添加更多层","S_OVR_QUICK":"添加到快速菜单","U_LOGIN":"登录","U_LOGOUT":"注销","U_PROFILE":"我的个人资料","U_PASSWD":"更改密码","U_CHANGE_PIC":"更改我的图片","OVR_RECOMENDED":"推荐活动：","OVR_ALL":"全部","OVR_FLYING":"飞行","OVR_WATER":"水上","OVR_SKI":"滑雪","MSG_OFFLINE":"貌似您已离线 :-(","MSG_ONLINE_APP":"再次上线，点击此处重新加载应用 :-)","MSG_LOGIN_SUCCESFULL":"您已成功登录！","FORGOT_PASSWORD":"忘了密码？","USERNAME_EMAIL":"用户名/电子邮件","DONT_HAVE_ACCOUNT":"还没有账户？","REGISTER_HERE":"在此注册","PASSWD":"密码","LOGIN":"登录","LOGIN_FAILED":"登录失败","ALERTS_PROMO":"绝不会错过重要日子","ALERTS_LINK":"为此地点设置Windy提醒","ALERTS_LINK_SHORT":"此地点的提醒","MY_ALERTS":"我的提醒","DIRECTION_N":"北","DIRECTION_NE":"东北","DIRECTION_E":"东","DIRECTION_SE":"东南","DIRECTION_S":"南","DIRECTION_SW":"西南","DIRECTION_W":"西","DIRECTION_NW":"西北","DIRECTIONS":"方向","DIRECTIONS_ANY":"任何方向","ACTIVATE":"激活","DEACTIVATE":"停用","REGISTER":"注册","JUST_LOGIN":"登录","MY_ACCOUNT":"我的账户","EDIT_ALERT":"编辑提醒","FAVS_RENAME":"重命名","ADD_ALERT":"创建提醒","HOME":"主页","MAP":"地图","MORE":"更多","LESS":"更少","COMPARE":"比较","PRESS_ISOLINES":"气压等值线","PART_ANIMATION":"粒子动画","R_TIME_RANGE":"时间范围","MY_LOCATION":"我的位置","D_ISOLINES":"显示等值线","DONATE":"捐赠","ARTICLES":"文章","NEW":"新！","WHAT_IS_NEW":"新功能：","PRIVACY":"隐私保护","SOUNDING":"声效","SOUND_ON":"声音","BLITZ_ON":"显示闪电","WFORECAST":"天气预报","TITLE":"风力图和天气预报","HURR_TRACKER":"飓风追踪器","TOC":"条款与条件","SEND":"发送","SEARCH_LAYER":"搜索图层","CANCEL_SEARCH":"取消搜索","NOT_FOUND":"未找到结果","P_HOME_BUTTON":"这是主页按钮。它总会让您返回主页。","P_LOGIN_SYNC":"请 <b>登录</b> 或 <b>注册</b> 将您的所有收藏和设置备份到云端。","P_LOGIN_CLOUD":"请 <b>登录</b> 或 <b>注册</b> 将您的所有收藏和设置备份到云端。"}
     };
 
-    return (map[locale] || {})[label] || `unknown "${label}"`;
+    return (map[getLocale()] || {})[label] || `unknown "${label}"`;
 }
