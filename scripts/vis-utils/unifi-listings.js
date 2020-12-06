@@ -28,7 +28,7 @@ const sortResetAfter = 120;     // Reset sort value after X seconds (0=disabled)
 const filterResetAfter = 120;   // Reset filter after X seconds (0=disabled)
 
 // Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
-const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: 1};
+const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: 3};
 
 const speedIconSize = 20;
 const speedTextSize = 14;
@@ -64,7 +64,7 @@ if (devicesView) {
 
 function createList() {
     try {
-        let devices = $('[id=unifi.0.default.clients.*.mac]'); // Query every time function is called (for new devices)
+        let devices = $('[id=unifi\.0\.default\.clients\.*\.mac]'); // Query every time function is called (for new devices)
         let deviceList = [];
 
         for (var i = 0; i <= devices.length - 1; i++) {
@@ -92,28 +92,30 @@ function createList() {
                 let received = formatTraffic(receivedRaw).replace('.', ',');
                 let sentRaw = getTraffic(isWired, idDevice, true);
                 let sent = formatTraffic(sentRaw).replace('.', ',');
+                let image = imagePath + ((note && note.image) ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png';
 
+                let uptime = getState(`${idDevice}.uptime`).val;
                 let speed = '';
-                let uptime = 0;
-                let image = '';
                 let wlanSignal = '';
 
                 if (isWired) {
-                    let switchPort = getState(`${idDevice}.sw_port`).val;
+                    // If exists prefer uptime on switch port
+                    uptime = existsState(`${idDevice}.uptime_by_usw`) ? getState(`${idDevice}.uptime_by_usw`).val : uptime;
+
+                    let switchMac = existsState(`${idDevice}.sw_mac`) ? getState(`${idDevice}.sw_mac`).val : false;
+                    let switchPort = existsState(`${idDevice}.sw_port`) ? getState(`${idDevice}.sw_port`).val : false;
+
+                    if (switchMac && switchPort) {
+                        speed = getState(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`).val.toString();
+                    }
 
                     // Do not consider fiber ports
                     if (switchPort > 24) {
                         continue; // Skip add
                     }
-
-                    speed = getState(`unifi.0.default.devices.${getState(`${idDevice}.sw_mac`).val}.port_table.port_${switchPort}.speed`).val;
-                    uptime = getState(`${idDevice}.uptime_by_usw`).val;
-                    image = (note && note.image) ? `${imagePath}${note.image}.png` : `${imagePath}lan_noImage.png`
                 } else {
                     speed = existsState(`${idDevice}.channel`) ? (getState(`${idDevice}.channel`).val > 13) ? '5G' : '2G' : '';
-                    uptime = getState(`${idDevice}.uptime`).val;
                     wlanSignal = getState(`${idDevice}.signal`).val;
-                    image = (note && note.image) ? `${imagePath}${note.image}.png` : `${imagePath}wlan_noImage.png`
                 }
 
                 addToList();
@@ -137,10 +139,10 @@ function createList() {
                     let text = isGuest ? `<span class="mdi mdi-account-box" style="color: #ff9800;"> ${name}</span>` : name;
                     let speedElement;
 
-                    if (speed === 1000 || speed === 100) {
+                    if (speed === '1000' || speed === '100') {
                         speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
                                             ${getLanSpeed(speed, speedIconSize, isConnected)}
-                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed.toString().replace('1000', '1.000')} MBit/s</span>
+                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed.replace('1000', '1.000')} MBit/s</span>
                                         </div>`
                     } else {
                         speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
@@ -355,7 +357,7 @@ function createList() {
             return `<span class="mdi mdi-network-off" style="color: gray; font-size: ${size}px;"></span>`
         }
 
-        if (speed === 1000) {
+        if (speed === '1000') {
             return `<span class="mdi mdi-network" style="color: green; font-size: ${size}px;"></span>`
         } else {
             return `<span class="mdi mdi-network" style="color: #ff9800; font-size: ${size}px;"></span>`
