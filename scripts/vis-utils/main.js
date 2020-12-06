@@ -7,11 +7,13 @@ const getLocale = () => existsState(`${statePrefix}.locale`) ? getState(`${state
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
 
 initializeState(`${statePrefix}.locale`, defaultLocale, {name: 'Selected locale', type: 'string'},  {change: 'ne'}, setup);
+initializeState(`${statePrefix}.languages`, '[]', {name: 'Localizzed languages list', type: 'string'});
 initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
 
 runAfterInitialization(setup);
 
 function setup() {
+    setLanguages();
     setViewTranslations();
 }
 
@@ -30,7 +32,44 @@ function setViewTranslations() {
     );
 }
 
-function translate(enText) {
+function setLanguages() {
+    const getText = (enText, locale) => `${translate(enText)}${getLocale() === locale ? '' : ( ' - ' + translate(enText, locale))}`;
+
+    setState(
+        `${statePrefix}.languages`,
+        JSON.stringify(
+            Object.entries({
+                en: 'English',
+                de: 'German',
+                ru: 'Russian',
+                pt: 'Portuguese',
+                nl: 'Dutch',
+                fr: 'French',
+                it: 'Italian',
+                es: 'Spanish',
+                pl: 'Polnisch',
+                'zh-cn': 'Chinese',
+            }).map(([key, value]) => ({value: key, text: getText(value, key)}))
+        ),
+        true
+    );
+
+    // Old simple listing
+    // [
+    //     {"value":"en", "text":"english"},
+    //     {"value":"de", "text":"deutsch"},
+    //     {"value":"ru", "text":"русский"},
+    //     {"value":"pt", "text":"português"},
+    //     {"value":"nl", "text":"dutsh"},
+    //     {"value":"fr", "text":"français"},
+    //     {"value":"it", "text":"italiano"},
+    //     {"value":"es", "text":"español"},
+    //     {"value":"pl", "text":"polerowany"},
+    //     {"value":"zh-cn", "text":"中国人"}
+    // ]
+}
+
+function translate(enText, forcedLocale = false) {
     const map = { // For translations used https://translator.iobroker.in (that uses Google translator)
         "Language": {
             "en": "Language",
@@ -103,8 +142,129 @@ function translate(enText) {
             "es": "Red",
             "pl": "Sieć",
             "zh-cn": "网络"
+        },
+        // languages:
+        "English": {
+            "en": "English",
+            "de": "Englisch",
+            "ru": "Английский",
+            "pt": "Inglês",
+            "nl": "Engels",
+            "fr": "Anglais",
+            "it": "Inglese",
+            "es": "Inglés",
+            "pl": "Język angielski",
+            "zh-cn": "英语"
+        },
+        "German": {
+            "en": "German",
+            "de": "Deutsche",
+            "ru": "Немецкий",
+            "pt": "alemão",
+            "nl": "Duitse",
+            "fr": "allemand",
+            "it": "Tedesco",
+            "es": "alemán",
+            "pl": "Niemiecki",
+            "zh-cn": "德语"
+        },
+        "Russian": {
+            "en": "Russian",
+            "de": "Russisch",
+            "ru": "русский",
+            "pt": "russo",
+            "nl": "Russisch",
+            "fr": "russe",
+            "it": "russo",
+            "es": "ruso",
+            "pl": "Rosyjski",
+            "zh-cn": "俄语"
+        },
+        "Portuguese": {
+            "en": "Portuguese",
+            "de": "Portugiesisch",
+            "ru": "португальский",
+            "pt": "Português",
+            "nl": "Portugees",
+            "fr": "Portugais",
+            "it": "portoghese",
+            "es": "portugués",
+            "pl": "portugalski",
+            "zh-cn": "葡萄牙语"
+        },
+        "Dutch": {
+            "en": "Dutch",
+            "de": "Niederländisch",
+            "ru": "нидерландский язык",
+            "pt": "holandês",
+            "nl": "Nederlands",
+            "fr": "néerlandais",
+            "it": "olandese",
+            "es": "holandés",
+            "pl": "holenderski",
+            "zh-cn": "荷兰语"
+        },
+        "French": {
+            "en": "French",
+            "de": "Französisch",
+            "ru": "французский язык",
+            "pt": "francês",
+            "nl": "Frans",
+            "fr": "français",
+            "it": "francese",
+            "es": "francés",
+            "pl": "Francuski",
+            "zh-cn": "法文"
+        },
+        "Italian": {
+            "en": "Italian",
+            "de": "Italienisch",
+            "ru": "Итальянский",
+            "pt": "italiano",
+            "nl": "Italiaans",
+            "fr": "italien",
+            "it": "italiano",
+            "es": "italiano",
+            "pl": "Włoski",
+            "zh-cn": "义大利文"
+        },
+        "Spanish": {
+            "en": "Spanish",
+            "de": "Spanisch",
+            "ru": "испанский язык",
+            "pt": "espanhol",
+            "nl": "Spaans",
+            "fr": "Espagnol",
+            "it": "spagnolo",
+            "es": "Español",
+            "pl": "hiszpański",
+            "zh-cn": "西班牙文"
+        },
+        "Polnisch": {
+            "en": "Polnisch",
+            "de": "Polnisch",
+            "ru": "Polnisch",
+            "pt": "Polnisch",
+            "nl": "Polnisch",
+            "fr": "Polnisch",
+            "it": "Polnisch",
+            "es": "Polnisch",
+            "pl": "Polnisch",
+            "zh-cn": "波尔尼施"
+        },
+        "Chinese": {
+            "en": "Chinese",
+            "de": "Chinesisch",
+            "ru": "китайский язык",
+            "pt": "chinês",
+            "nl": "Chinese",
+            "fr": "chinois",
+            "it": "Cinese",
+            "es": "chino",
+            "pl": "chiński",
+            "zh-cn": "中文"
         }
-    };
+   };
 
-    return (map[enText] || {})[getLocale()] || enText;
+    return (map[enText] || {})[forcedLocale || getLocale()] || enText;
 }

@@ -20,7 +20,7 @@ function runAfterInitialization(callback) {
     setTimeout(() => runAfterInitialization(callback), 100);
 }
 
-function initializeState(stateId, defaultValue, common, listenerProps, listenerCallback) {
+function initializeState(stateId, defaultValue, common, listenerProps = false, listenerCallback = undefined) {
     const registerListener = () => {
         if (listenerProps) {
             listenerProps['id'] = stateId;
