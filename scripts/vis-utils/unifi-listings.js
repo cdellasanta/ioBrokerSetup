@@ -15,8 +15,8 @@
  */
 
 // Script configuration
-const prefix = '0_userdata.0.vis.unifiNetworkState'; // Might be better to use an english prefix (e.g. '0_userdata.0.vis.unifiNetworkState'), but then remember to adapt the Views too
-const locale = 'it'; // On change make sure you drop all states (delete prefix directory)
+const statePrefix = '0_userdata.0.vis.unifiNetworkState'; // Might be better to use an english statePrefix (e.g. '0_userdata.0.vis.unifiNetworkState'), but then remember to adapt the Views too
+const locale = 'it'; // On change make sure you drop all states (delete statePrefix directory)
 
 const lastDays = 7;       // Show devices that have been seen in the network within the last X days
 const updateInterval = 1; // Lists update interval in minutes (modulo on current minutes, therefore more than 30 means once per hour, more than 60 means never)
@@ -42,7 +42,7 @@ const offlineTextSize = 14;
 const mathjs = require('mathjs');
 const moment = require('moment');
 
-// States are registered automatically if prefix directory does not exists (delete directory to recreate them)
+// States are registered automatically if statePrefix directory does not exists (delete directory to recreate them)
 setup();
 
 // Create lists on script startup
@@ -52,14 +52,14 @@ createList();
 schedule(`*/${updateInterval} * * * *`, createList);
 
 // Change on sort mode triggers list generation and reset of sort-timer-reset
-on({id: `${prefix}.sortMode`, change: 'any'}, () => { createList(); resetSortTimer(); });
+on({id: `${statePrefix}.sortMode`, change: 'any'}, () => { createList(); resetSortTimer(); });
 
 // Change on filter mode triggers list generation and reset of filter-timer-reset
-on({id: `${prefix}.filterMode`, change: 'any'}, () => { createList(); resetFilterTimer(); });
+on({id: `${statePrefix}.filterMode`, change: 'any'}, () => { createList(); resetFilterTimer(); });
 
 if (devicesView) {
     // On selected device change, go to "Devices" view
-    on({id: `${prefix}.selectedUrl`, change: 'any'}, () => { setState(devicesView.currentViewState, devicesView.devicesViewKey); });
+    on({id: `${statePrefix}.selectedUrl`, change: 'any'}, () => { setState(devicesView.currentViewState, devicesView.devicesViewKey); });
 }
 
 function createList() {
@@ -188,7 +188,7 @@ function createList() {
         }
 
         // Sorting
-        let sortMode = existsState(`${prefix}.sortMode`) ? getState(`${prefix}.sortMode`).val : defaultSortMode;
+        let sortMode = existsState(`${statePrefix}.sortMode`) ? getState(`${statePrefix}.sortMode`).val : defaultSortMode;
 
         deviceList.sort((a, b) => {
             switch (sortMode) {
@@ -222,7 +222,7 @@ function createList() {
 
                     // Change behaviour to buttonState, a listener on the state change on objectId will trigger the jump to that view
                     obj['listType'] = 'buttonState';
-                    obj['objectId'] = `${prefix}.selectedUrl`;
+                    obj['objectId'] = `${statePrefix}.selectedUrl`;
                     obj['showValueLabel'] = false;
                     obj['buttonStateValue'] = obj.buttonLink;
                     delete obj['buttonLink'];
@@ -231,13 +231,13 @@ function createList() {
 
             let linkListString = JSON.stringify(linkList);
 
-            if (existsState(`${prefix}.linksJsonList`) && getState(`${prefix}.linksJsonList`).val !== linkListString) {
-                setState(`${prefix}.linksJsonList`, linkListString, true);
+            if (existsState(`${statePrefix}.linksJsonList`) && getState(`${statePrefix}.linksJsonList`).val !== linkListString) {
+                setState(`${statePrefix}.linksJsonList`, linkListString, true);
             }
         }
 
         // Filtering
-        let filterMode = existsState(`${prefix}.filterMode`) ? getState(`${prefix}.filterMode`).val : '';
+        let filterMode = existsState(`${statePrefix}.filterMode`) ? getState(`${statePrefix}.filterMode`).val : '';
 
         if (filterMode && filterMode !== '') {
             deviceList = deviceList.filter(item => {
@@ -258,8 +258,8 @@ function createList() {
 
         let result = JSON.stringify(deviceList);
 
-        if (existsState(`${prefix}.jsonList`) && getState(`${prefix}.jsonList`).val !== result) {
-            setState(`${prefix}.jsonList`, result, true);
+        if (existsState(`${statePrefix}.jsonList`) && getState(`${statePrefix}.jsonList`).val !== result) {
+            setState(`${statePrefix}.jsonList`, result, true);
         }
     } catch (err) {
         console.error(`[createList] error: ${err.message}`);
@@ -403,24 +403,24 @@ function createList() {
 }
 
 function resetSortTimer() {
-    let sortMode = existsState(`${prefix}.sortMode`) ? getState(`${prefix}.sortMode`).val : '';
+    let sortMode = existsState(`${statePrefix}.sortMode`) ? getState(`${statePrefix}.sortMode`).val : '';
 
     if (sortResetAfter > 0) {
         setTimeout(() => {
-            if (existsState(`${prefix}.sortMode`) && sortMode === getState(`${prefix}.sortMode`).val) {
-                setState(`${prefix}.sortMode`, defaultSortMode);
+            if (existsState(`${statePrefix}.sortMode`) && sortMode === getState(`${statePrefix}.sortMode`).val) {
+                setState(`${statePrefix}.sortMode`, defaultSortMode);
             }
         }, sortResetAfter * 1000);
     }
 }
 
 function resetFilterTimer() {
-    let filterMode = existsState(`${prefix}.filterMode`) ? getState(`${prefix}.filterMode`).val : '';
+    let filterMode = existsState(`${statePrefix}.filterMode`) ? getState(`${statePrefix}.filterMode`).val : '';
 
     if (filterResetAfter > 0) {
         setTimeout(() => {
-            if (existsState(`${prefix}.filterMode`) && filterMode === getState(`${prefix}.filterMode`).val) {
-                setState(`${prefix}.filterMode`, '');
+            if (existsState(`${statePrefix}.filterMode`) && filterMode === getState(`${statePrefix}.filterMode`).val) {
+                setState(`${statePrefix}.filterMode`, '');
             }
         }, filterResetAfter * 1000);
     }
@@ -450,7 +450,7 @@ function setup() {
     });
 
     // Create states
-    if (!existsState(prefix)) { // Check on prefix (the directory)
+    if (!existsState(statePrefix)) { // Check on statePrefix (the directory)
         const sortItems = [
             {
                 text: translate('Name'),
@@ -518,18 +518,18 @@ function setup() {
             'Device'
         ].reduce((o, key) => ({ ...o, [key]: translate(key)}), {});
 
-        createState(`${prefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
-        createState(`${prefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'});
-        createState(`${prefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'});
+        createState(`${statePrefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
+        createState(`${statePrefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'});
+        createState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'});
 
         // Sorters, filters and some additional translations are saved in states to permit texts localization
-        createState(`${prefix}.sortersJsonList`, JSON.stringify(sortItems), {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
-        createState(`${prefix}.filtersJsonList`, JSON.stringify(filterItems), {name: 'UniFi device listing: filtersJsonList', type: 'string', read: true, write: false});
-        createState(`${prefix}.translations`, JSON.stringify(viewTranslations), {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
+        createState(`${statePrefix}.sortersJsonList`, JSON.stringify(sortItems), {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
+        createState(`${statePrefix}.filtersJsonList`, JSON.stringify(filterItems), {name: 'UniFi device listing: filtersJsonList', type: 'string', read: true, write: false});
+        createState(`${statePrefix}.translations`, JSON.stringify(viewTranslations), {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
 
         if (devicesView) {
-            createState(`${prefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
-            createState(`${prefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'});
+            createState(`${statePrefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
+            createState(`${statePrefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'});
         }
     }
 }
