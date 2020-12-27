@@ -125,7 +125,7 @@ function createList() {
             let isWired = getStateValue(`${idDevice}.is_wired`);
             let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
 
-            // If lastSeen deifference is bigger than lanstDays, then skip the device
+            // If lastSeen deifference is bigger than lastDays, then skip the device
             if ((new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
                 continue;
             }
@@ -210,7 +210,6 @@ function createList() {
                 uptime: uptime,
                 isWired: isWired
             });
-            
         }
 
         // Sorting
@@ -241,9 +240,11 @@ function createList() {
             deviceList.forEach(obj => {
                 if (obj.listType === 'buttonLink') {
                     linkList.push({
-                        text: obj.name, /** @todo Add some props (connected, ip, received, sent, experience, ...)? */
+                        // Visualization data (tplVis-materialdesign-Select)
+                        text: obj.name,
                         value: obj.buttonLink,
                         icon: obj.icon
+                         /** @todo Add some props (connected, ip, received, sent, experience, ...)? */
                     });
 
                     // Change behaviour to buttonState, a listener on the state change on objectId will trigger the jump to that view
@@ -465,7 +466,7 @@ function translate(enText) {
     return (map[enText] || {})[locale] || enText;
 }
 
-const formatBytes = (bytes, decimals?: number, unit?: 'SI' | 'IEC') : string => {
+function formatBytes(bytes, decimals?: number, unit?: 'SI' | 'IEC') : string  {
     if (bytes === 0) return 'N/A';
 
     const orderOfMagnitude = unit === 'SI' ? Math.pow(10, 3) : Math.pow(2, 10);
