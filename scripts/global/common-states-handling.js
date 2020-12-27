@@ -1,7 +1,7 @@
 // My global functions for state and listener intilialization
 // see doc https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#global-functions
 // It works like PHP traits
-// In the script you need to declare tham:
+// In the script you need to declare them:
 
 const resetStatesOnReload = true; // Enable only when actively developing
 
@@ -67,3 +67,16 @@ function initializeState(stateId, defaultValue, common, listenerProps = false, l
         registerListener();
     }
 }
+
+function getStateIfExists(stateId) {
+    if (!existsState(stateId)) {
+        return null;
+    }
+
+    return getState(stateId);
+}
+
+function getStateValue(stateId) {
+    return (getStateIfExists(stateId) || {}).val || null;
+}
+
