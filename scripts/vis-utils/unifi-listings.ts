@@ -4,7 +4,7 @@
  * Requirements:
  *  - UniFi controller running on your network
  *  - UniFi ioBroker adapter >= 0.5.8 (https://www.npmjs.com/package/iobroker.unifi)
- *  - Libraries on ioBroker
+ *  - Libraries "mathjs" and "moment" in the "Additional npm modules" of the javascript.0 adapter configuration
  *  - Some programming skills
  *
  * @license http://www.opensource.org/licenses/mit-license.html  MIT License
@@ -23,6 +23,10 @@ const updateInterval = 1; // Lists update interval in minutes (modulo on current
 
 const imagePath = '/vis.0/myImages/networkDevices/'; // Path for images
 
+const byteDecimals = 2;
+const byteUnits = 'SI'; // SI units use the Metric representation based on 10^3 (1'000) as a order of magnitude
+                        // IEC units use 2^10 (1'024) as an order of magnitude  
+
 const defaultSortMode = 'name'; // Value for default and reset sort
 const sortResetAfter = 120;     // Reset sort value after X seconds (0=disabled)
 const filterResetAfter = 120;   // Reset filter after X seconds (0=disabled)
@@ -37,10 +41,49 @@ const trafficTextSize = 14;
 const experienceIconSize = 20;
 const experienceTextSize = 14;
 const offlineTextSize = 14;
+const levelMaps = {
+	none: { 
+		color: 'gray', 
+		experience: 'mdi-speedometer',
+		speedLan: 'mdi-network-off',
+		speedWifi: 'mdi-wifi-off'
+	},
+	fast: { 
+		color: 'green', 
+		experience: 'mdi-speedometer',
+		speedLan: 'mdi-network',
+		speedWifi: 'mdi-signal-cellular-3'
+	},
+	medium: { 
+		color: '#ff9800', 
+		experience: 'mdi-speedometer-medium',
+		speedLan: 'mdi-network',
+		speedWifi: 'mdi-signal-cellular-2'
+	},
+	slow: { 
+		color: 'FireBrick',
+		experience: 'mdi-speedometer-slow',
+		speedLan: 'mdi-network',		
+		speedWifi: 'mdi-signal-cellular-1'
+	}
+};
+
 
 // **********************************************************************************************************************************************************************
+// Libs, no need to 'require' or 'import' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module)
+// But to avoid TypeScript inspection errors, doing it anyway ...
+// @ts-ignore
 const mathjs = require('mathjs');
+// @ts-ignore
 const moment = require('moment');
+
+// Initialization create/delete states, register listeners
+// Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
+declare function runAfterInitialization(callback: CallableFunction): void;
+declare function initializeState(stateId: string, defaultValue: any, common: object, listenerProps?: boolean, listenerCallback?: CallableFunction): void;
+declare function getStateIfExists(stateId: string): any;
+declare function getStateValue(stateId: string): any;
+
 
 // States are registered automatically if statePrefix directory does not exists (delete directory to recreate them)
 setup();
@@ -63,132 +106,115 @@ if (devicesView) {
 }
 
 function createList() {
+    const getNote = (idDevice, name, mac, ip) => {
+        try {
+            return JSON.parse(getStateValue(`${idDevice}.note`) || '{}');
+        } catch (ex) {
+            console.error(`${name} (ip: ${ip}, mac: ${mac}): ${ex.message}`);
+        }
+
+        return {};
+    }
+
     try {
         let devices = $('[id=unifi\.0\.default\.clients\.*\.mac]'); // Query every time function is called (for new devices)
         let deviceList = [];
-
+      
         for (var i = 0; i <= devices.length - 1; i++) {
             let idDevice = devices[i].replace('.mac', '');
-            let isWired = getState(`${idDevice}.is_wired`).val;
-            let lastSeen = new Date(getState(`${idDevice}.last_seen`).val);
+            let isWired = getStateValue(`${idDevice}.is_wired`);
+            let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
 
-            if (isInRange(lastSeen)) {
-                // Values for both WLAN and LAN
-                let isConnected = getState(`${idDevice}.is_online`).val;
-                let ip = existsState(`${idDevice}.ip`) ? getState(`${idDevice}.ip`).val : '';
-                let mac = idDevice;
-                let name = getName(idDevice, ip, mac);
-                let isGuest = getState(`${idDevice}.is_guest`).val;
-                let experience = (existsState(`${idDevice}.satisfaction`) && isConnected) ? (getState(`${idDevice}.satisfaction`).val || 100) : 0; // For LAN devices I got null as expirience .. file a bug?
-                let note = parseNote(idDevice, name, mac, ip);
-                let icon = (note && note.icon) || '';
-
-                let listType = 'text';
-                let buttonLink = '';
-                setLink();
-
-                // Variables for values that are fetched differently depending on device wiring
-                let receivedRaw = getTraffic(isWired, idDevice)
-                let received = formatTraffic(receivedRaw).replace('.', ',');
-                let sentRaw = getTraffic(isWired, idDevice, true);
-                let sent = formatTraffic(sentRaw).replace('.', ',');
-                let image = imagePath + ((note && note.image) ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png';
-
-                let uptime = getState(`${idDevice}.uptime`).val;
-                let speed = '';
-                let wlanSignal = '';
-
-                if (isWired) {
-                    // If exists prefer uptime on switch port
-                    uptime = existsState(`${idDevice}.uptime_by_usw`) ? getState(`${idDevice}.uptime_by_usw`).val : uptime;
-
-                    let switchMac = existsState(`${idDevice}.sw_mac`) ? getState(`${idDevice}.sw_mac`).val : false;
-                    let switchPort = existsState(`${idDevice}.sw_port`) ? getState(`${idDevice}.sw_port`).val : false;
-
-                    if (switchMac && switchPort) {
-                        speed = getState(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`).val.toString();
-                    }
-
-                    // Do not consider fiber ports
-                    if (switchPort > 24) {
-                        continue; // Skip add
-                    }
-                } else {
-                    speed = existsState(`${idDevice}.channel`) ? (getState(`${idDevice}.channel`).val > 13) ? '5G' : '2G' : '';
-                    wlanSignal = getState(`${idDevice}.signal`).val;
-                }
-
-                addToList();
-
-                function setLink() {
-                    if (note && note.link) {
-                        listType = 'buttonLink';
-
-                        if (note.link === 'http') {
-                            buttonLink = `http://${ip}`;
-                        } else if (note.link === 'https') {
-                            buttonLink = `https://${ip}`;
-                        } else {
-                            buttonLink = note.link;
-                        }
-                    }
-                }
-
-                function addToList() {
-                    let statusBarColor = isConnected ? 'green' : 'FireBrick';
-                    let text = isGuest ? `<span class="mdi mdi-account-box" style="color: #ff9800;"> ${name}</span>` : name;
-                    let speedElement;
-
-                    if (speed === '1000' || speed === '100') {
-                        speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                                            ${getLanSpeed(speed, speedIconSize, isConnected)}
-                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed.replace('1000', '1.000')} MBit/s</span>
-                                        </div>`
-                    } else {
-                        speedElement = `<div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                                            ${getWifiStrength(wlanSignal, speedIconSize, isConnected)}
-                                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speed}</span>
-                                        </div>`;
-                    }
-
-                    let receivedElement = `<span class="mdi mdi-arrow-down" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px; margin-right: 4px">${received}</span>`
-                    let sentElement = `<span class="mdi mdi-arrow-up" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px;">${sent}</span>`
-
-                    let experienceElement = `<div style="display: flex; margin-left: 8px; align-items: center;">${getExperience(experience, experienceIconSize, isConnected)}<span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${experienceTextSize}px; margin-left: 4px;">${experience} %</span></div>`
-
-                    let subText = `
-                                ${ip}
-                                <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; align-items: center; justify-content: center;">
-                                    ${getOnOffTime(isConnected, uptime, lastSeen)}
-                                </div>
-                                <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; margin-top: 10px; align-items: center;">
-                                    ${speedElement}${receivedElement}${sentElement}${experienceElement}
-                                </div>
-                                `
-
-                    deviceList.push({
-                        text: text,
-                        subText: subText,
-                        listType: listType,
-                        buttonLink: buttonLink,
-                        image: image,
-                        icon: icon,
-                        statusBarColor: statusBarColor,
-                        name: name,
-                        ip: ip,
-                        connected: isConnected,
-                        received: receivedRaw,
-                        sent: sentRaw,
-                        experience: experience,
-                        uptime: uptime,
-                        isWired: isWired
-                    });
-                }
+            // If lastSeen deifference is bigger than lanstDays, then skip the device
+            if ((new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
+                continue;
             }
+
+            // Values for both WLAN and LAN
+            let isConnected = getStateValue(`${idDevice}.is_online`);
+            let ip = getStateValue(`${idDevice}.ip`) || '';
+            let mac = idDevice.split('.').pop();
+            let name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
+            let isGuest = getStateValue(`${idDevice}.is_guest`);
+            let note = getNote(idDevice, name, mac, ip);
+            let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
+			let experienceLevel = !isConnected ? 'none' : (experience >= 70 ? 'fast' : (experience >= 40 ? 'medium' : 'slow'));
+
+            // Variables for values that are fetched differently depending on device wiring
+            let received = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}tx_bytes`) || 0;
+            let sent = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}rx_bytes`) || 0;
+            let uptime = getStateValue(`${idDevice}.uptime`);
+            let speedText = '';
+            let speedLevel = 'none';
+
+            if (isWired) {
+                // If exists prefer uptime on switch port
+                uptime = getStateValue(`${idDevice}.uptime_by_usw`) || uptime;
+
+                let switchMac = getStateValue(`${idDevice}.sw_mac`) || false;
+                let switchPort = getStateValue(`${idDevice}.sw_port`) || false;
+
+                if (switchMac && switchPort) {
+                    let speed = getStateValue(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`);
+                    speedText = Number(speed).toString().replace('1000', '1.000') + ' MBit/s';
+                    speedLevel = !isConnected ? 'none' : (speed == 1000 ? 'fast' : 'medium');
+                }
+
+                // Do not consider fiber ports
+                if (switchPort > 24) {
+                    continue; // Skip device
+                }
+            } else {
+                let channel = getStateValue(`${idDevice}.channel`);
+                let signal = getStateValue(`${idDevice}.signal`);
+                speedText = channel === null ? '' : (channel > 13 ? '5G' : '2G');
+                speedLevel = !isConnected ? 'none' : (signal >= -55 ? 'fast' : (signal >= -70 ? 'medium' : 'slow'));
+            }
+
+            deviceList.push({
+                // Visualization data (tplVis-materialdesign-Icon-List)
+                statusBarColor: isConnected ? 'green' : 'FireBrick',
+                text: isGuest ? `<span class="mdi mdi-account-box" style="color: #ff9800;">${name}</span>` : name,
+                subText: `
+                    ${ip}
+                    <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; align-items: center; justify-content: center;">
+                        <span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">
+                            ${translate(isConnected ? 'online' : 'offline')} ${(isConnected ? moment().subtract(uptime, 's') : moment(lastSeen)).fromNow()}
+                        </span>
+                    </div>
+                    <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; margin-top: 10px; align-items: center;">
+                        <div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
+                            <span class="mdi ${levelMaps[speedLevel][isWired ? 'speedLan' : 'speedWifi']}" style="color: ${levelMaps[speedLevel].color}; font-size: ${speedIconSize}px"></span>
+                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speedText}</span>
+                        </div>                       
+                        <span class="mdi mdi-arrow-down" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px; margin-right: 4px">${formatBytes(received, byteDecimals, byteUnits)}</span>
+                        <span class="mdi mdi-arrow-up" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px;">${formatBytes(sent, byteDecimals, byteUnits)}</span>
+                        <div style="display: flex; margin-left: 8px; align-items: center;">
+                            <span class="mdi mdi-speedometer${levelMaps[experienceLevel].experience}" style="color: ${levelMaps[experienceLevel].color}; font-size: ${experienceIconSize}px;"></span>
+                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${experienceTextSize}px; margin-left: 4px;">${experience} %</span>
+                        </div>
+                    </div>
+                `,
+                listType: !note.link ? 'text' : 'buttonLink',
+                buttonLink: !note.link ? '' : (['http', 'https'].includes(note.link) ? `${note.link}://${ip}` : note.link),
+                image: imagePath + ((note && note.image) ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png',
+                icon: note.icon || '',
+                
+                // Additional data for sorting
+                name: name,
+                ip: ip,
+                connected: isConnected,
+                received: received,
+                sent: sent,
+                experience: experience,
+                uptime: uptime,
+                isWired: isWired
+            });
+            
         }
 
         // Sorting
-        let sortMode = existsState(`${statePrefix}.sortMode`) ? getState(`${statePrefix}.sortMode`).val : defaultSortMode;
+        let sortMode = getStateValue(`${statePrefix}.sortMode`) || defaultSortMode;
 
         deviceList.sort((a, b) => {
             switch (sortMode) {
@@ -231,13 +257,13 @@ function createList() {
 
             let linkListString = JSON.stringify(linkList);
 
-            if (existsState(`${statePrefix}.linksJsonList`) && getState(`${statePrefix}.linksJsonList`).val !== linkListString) {
+            if (getStateValue(`${statePrefix}.linksJsonList`) !== linkListString) {
                 setState(`${statePrefix}.linksJsonList`, linkListString, true);
             }
         }
 
         // Filtering
-        let filterMode = existsState(`${statePrefix}.filterMode`) ? getState(`${statePrefix}.filterMode`).val : '';
+        let filterMode = getStateValue(`${statePrefix}.filterMode`) || '';
 
         if (filterMode && filterMode !== '') {
             deviceList = deviceList.filter(item => {
@@ -258,171 +284,32 @@ function createList() {
 
         let result = JSON.stringify(deviceList);
 
-        if (existsState(`${statePrefix}.jsonList`) && getState(`${statePrefix}.jsonList`).val !== result) {
+        if (getStateValue(`${statePrefix}.jsonList`) !== result) {
             setState(`${statePrefix}.jsonList`, result, true);
         }
     } catch (err) {
         console.error(`[createList] error: ${err.message}`);
         console.error(`[createList] stack: ${err.stack}`);
     }
-
-    // Functions **************************************************************************************************************************************
-    function getTraffic(isWired, idDevice, isSent = false) {
-        if (!isSent) {
-            // Received
-            if (isWired) {
-                if (existsState(`${idDevice}.wired-tx_bytes`)) {
-                    return getState(`${idDevice}.wired-tx_bytes`).val;
-                }
-            } else {
-                if (existsState(`${idDevice}.tx_bytes`)) {
-                    return getState(`${idDevice}.tx_bytes`).val;
-                }
-            }
-        } else {
-            // Sent
-            if (isWired) {
-                if (existsState(`${idDevice}.wired-rx_bytes`)) {
-                    return getState(`${idDevice}.wired-rx_bytes`).val;
-                }
-            } else {
-                if (existsState(`${idDevice}.rx_bytes`)) {
-                    return getState(`${idDevice}.rx_bytes`).val;
-                }
-            }
-        }
-
-        return 0;
-    }
-
-    function formatTraffic(traffic) {
-        if (traffic > 0) {
-            traffic = parseFloat(traffic) / 1048576;
-            if (traffic < 100) {
-                return `${mathjs.round(traffic, 0)} MB`
-            } else {
-                return `${mathjs.round(traffic / 1024, 2)} GB`
-            }
-        }
-
-        return 'N/A';
-    }
-
-    function getName(idDevice, ip, mac) {
-        let deviceName = '';
-
-        if (existsState(`${idDevice}.name`)) {
-            deviceName = getState(`${idDevice}.name`).val;
-        }
-
-        if (deviceName === null || deviceName === undefined || deviceName === '') {
-            if (existsState(`${idDevice}.hostname`)) {
-                deviceName = getState(`${idDevice}.hostname`).val;
-            }
-        }
-
-        if (deviceName === null || deviceName === undefined || deviceName === '') {
-            if (ip !== null && ip !== undefined && ip !== '') {
-                deviceName = ip;
-            } else {
-                deviceName = mac;
-            }
-        }
-
-        return deviceName;
-    }
-
-    function isInRange(lastSeen) {
-        let diff = new Date().getTime() - lastSeen.getTime() * 1000;
-
-        return (diff < lastDays * 86400 * 1000) ? true : false;
-    }
-
-    function getWifiStrength(signal, size, isConnected) {
-        if (!isConnected) {
-            return `<span class="mdi mdi-wifi-off" style="color: gray; font-size: ${size}px"></span>`
-        }
-
-        if (signal < -70) {
-            return `<span class="mdi mdi-signal-cellular-1" style="color: FireBrick; font-size: ${size}px"></span>`
-        } else if (signal >= -70 && signal < -55) {
-            return `<span class="mdi mdi-signal-cellular-2" style="color: #ff9800; font-size: ${size}px"></span>`
-        } else {
-            return `<span class="mdi mdi-signal-cellular-3" style="color: green; font-size: ${size}px"></span>`
-        }
-    }
-
-    function getLanSpeed(speed, size, isConnected) {
-        if (!isConnected) {
-            return `<span class="mdi mdi-network-off" style="color: gray; font-size: ${size}px;"></span>`
-        }
-
-        if (speed === '1000') {
-            return `<span class="mdi mdi-network" style="color: green; font-size: ${size}px;"></span>`
-        } else {
-            return `<span class="mdi mdi-network" style="color: #ff9800; font-size: ${size}px;"></span>`
-        }
-    }
-
-    function getExperience(experience, size, isConnected) {
-        let color = 'gray';
-        let icon = 'mdi-speedometer';
-
-        if (isConnected) {
-            if (experience >= 70) {
-                color = 'green';
-            } else if (experience >= 40) {
-                color = '#ff9800';
-                icon += '-medium';
-            } else {
-                color = 'FireBrick';
-                icon += '-slow';
-            }
-        }
-
-        return `<span class="mdi ${icon}" style="color: ${color}; font-size: ${size}px;"></span>`;
-    }
-
-    function parseNote(idDevice, name, mac, ip) {
-        try {
-            if (existsState(`${idDevice}.note`)) {
-                return JSON.parse(getState(`${idDevice}.note`).val);
-            }
-        } catch (ex) {
-            console.error(`${name} (ip: ${ip}, mac: ${mac}): ${ex.message}`);
-        }
-
-        return undefined;
-    }
-
-    function getOnOffTime(isConnected, uptime, lastSeen) {
-        return `<span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">
-               ${translate(isConnected ? 'online' : 'offline')} ${(isConnected ? moment().subtract(uptime, 's') : moment(lastSeen)).fromNow()}
-               </span>`;
-    }
 }
+
+let sortTimeoutID;
 
 function resetSortTimer() {
-    let sortMode = existsState(`${statePrefix}.sortMode`) ? getState(`${statePrefix}.sortMode`).val : '';
-
     if (sortResetAfter > 0) {
-        setTimeout(() => {
-            if (existsState(`${statePrefix}.sortMode`) && sortMode === getState(`${statePrefix}.sortMode`).val) {
-                setState(`${statePrefix}.sortMode`, defaultSortMode);
-            }
-        }, sortResetAfter * 1000);
+        this.clearTimeout(sortTimeoutID); // Clear previous timer, if set
+
+        sortTimeoutID = this.setTimeout(() => setState(`${statePrefix}.sortMode`, defaultSortMode), sortResetAfter * 1000);
     }
 }
 
-function resetFilterTimer() {
-    let filterMode = existsState(`${statePrefix}.filterMode`) ? getState(`${statePrefix}.filterMode`).val : '';
+let filterTimeoutID;
 
+function resetFilterTimer() {
     if (filterResetAfter > 0) {
-        setTimeout(() => {
-            if (existsState(`${statePrefix}.filterMode`) && filterMode === getState(`${statePrefix}.filterMode`).val) {
-                setState(`${statePrefix}.filterMode`, '');
-            }
-        }, filterResetAfter * 1000);
+        this.clearTimeout(filterTimeoutID); // Clear previous timer, if set
+
+        filterTimeoutID = this.setTimeout(() => setState(`${statePrefix}.filterMode`, ''), filterResetAfter * 1000);
     }
 }
 
@@ -576,4 +463,16 @@ function translate(enText) {
     };
 
     return (map[enText] || {})[locale] || enText;
+}
+
+const formatBytes = (bytes, decimals?: number, unit?: 'SI' | 'IEC') : string => {
+    if (bytes === 0) return 'N/A';
+
+    const orderOfMagnitude = unit === 'SI' ? Math.pow(10, 3) : Math.pow(2, 10);
+    const abbreviations = unit === 'SI' ?
+        ['Bytes', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'] :
+        ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(orderOfMagnitude));
+
+    return parseFloat((bytes / Math.pow(orderOfMagnitude, i)).toFixed(decimals || 2)) + ' ' + abbreviations[i];
 }
