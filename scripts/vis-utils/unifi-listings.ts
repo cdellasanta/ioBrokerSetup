@@ -2,7 +2,7 @@
  * Listings for UniFi devices (to use with Material Design Widgets)
  *
  * Requirements:
- *  - UniFi controller running on your network
+ *  - UniFi controller permanently running on your network
  *  - UniFi ioBroker adapter >= 0.5.8 (https://www.npmjs.com/package/iobroker.unifi)
  *  - Library "moment" in the "Additional npm modules" of the javascript.0 adapter configuration
  *  - Some programming skills
@@ -21,9 +21,6 @@ const locale = 'it'; // On change make sure you drop all states (delete statePre
 const lastDays = 7;       // Show devices that have been seen in the network within the last X days
 const updateInterval = 1; // Lists update interval in minutes (modulo on current minutes, therefore more than 30 means once per hour, more than 60 means never)
 
-const imagePath = '/vis.0/myImages/networkDevices/'; // Path for images
-
-const byteDecimals = 2;
 const byteUnits = 'SI'; // SI units use the Metric representation based on 10^3 (1'000) as a order of magnitude
                         // IEC units use 2^10 (1'024) as an order of magnitude  
 
@@ -31,39 +28,41 @@ const defaultSortMode = 'name'; // Value for default and reset sort
 const sortResetAfter = 120;     // Reset sort value after X seconds (0=disabled)
 const filterResetAfter = 120;   // Reset filter after X seconds (0=disabled)
 
+const imagesPath = '/vis.0/myImages/networkDevices/'; // Path for images
+
+// Optional: Path prefix for UniFi device images (see getUnifiImage function for deeper information on how to extract it for your network)
+// If set to null will use the 'lan_noImage.png' for all devices, if set to false will use '<device model>.png' from your imagesPath
+const unifiImagesUrlPrefix = 'https://controller.dsnet.me:8443/manage/angular/g7989b19/images/devices/';
+    
 // Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
 const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: 3};
 
-const speedIconSize = 20;
-const speedTextSize = 14;
-const trafficIconSize = 14;
-const trafficTextSize = 14;
-const experienceIconSize = 20;
-const experienceTextSize = 14;
 const offlineTextSize = 14;
-const levelMaps = {
-	none: { 
-		color: 'gray', 
+const infoIconSize = 20;
+const infoTextSize = 14;
+const performances = {
+	none: {
+		color: 'grey',
 		experience: 'mdi-speedometer',
 		speedLan: 'mdi-network-off',
 		speedWifi: 'mdi-wifi-off'
 	},
-	fast: { 
-		color: 'green', 
+	good: {
+		color: 'green',
 		experience: 'mdi-speedometer',
 		speedLan: 'mdi-network',
 		speedWifi: 'mdi-signal-cellular-3'
 	},
-	medium: { 
-		color: '#ff9800', 
+	low: {
+		color: '#ff9800',
 		experience: 'mdi-speedometer-medium',
 		speedLan: 'mdi-network',
 		speedWifi: 'mdi-signal-cellular-2'
 	},
-	slow: { 
+	bad: {
 		color: 'FireBrick',
 		experience: 'mdi-speedometer-slow',
-		speedLan: 'mdi-network',		
+		speedLan: 'mdi-network',
 		speedWifi: 'mdi-signal-cellular-1'
 	}
 };
@@ -115,58 +114,86 @@ function createList() {
     }
 
     try {
-        let devices = $('[id=unifi\.0\.default\.clients\.*\.mac]'); // Query every time function is called (for new devices)
+        // Selector help: https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#---selector
+        let devices = $('state[id=unifi\.0\.default\.*\.*\.mac]'); // Query every time function is called (for new devices)
+
         let deviceList = [];
       
         for (var i = 0; i <= devices.length - 1; i++) {
-            let idDevice = devices[i].replace('.mac', '');
-            let isWired = getStateValue(`${idDevice}.is_wired`);
-            let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
+            let [,,, deviceType, mac] = devices[i].split('.');
 
-            // If lastSeen deifference is bigger than lastDays, then skip the device
-            if ((new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
+            // Only 'clients' and 'devices' are allowed
+            if (!['clients', 'devices'].includes(deviceType)) {
                 continue;
             }
 
-            // Values for both WLAN and LAN
-            let isConnected = getStateValue(`${idDevice}.is_online`);
+            let idDevice = devices[i].replace('.mac', '');
+            let unifiDevice = deviceType === 'devices';
+            let isWired = getStateValue(`${idDevice}.is_wired`);
+
+            let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
+
+            // For clients, if lastSeen deifference is bigger than lastDays, then skip the device
+            if (!unifiDevice && (new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
+                continue;
+            }
+
+            // Values for all device types and connection
+            let isConnected = unifiDevice || getStateValue(`${idDevice}.is_online`);
             let ip = getStateValue(`${idDevice}.ip`) || '';
-            let mac = idDevice.split('.').pop();
             let name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
             let isGuest = getStateValue(`${idDevice}.is_guest`);
             let note = getNote(idDevice, name, mac, ip);
-            let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
-			let experienceLevel = !isConnected ? 'none' : (experience >= 70 ? 'fast' : (experience >= 40 ? 'medium' : 'slow'));
-
-            // Variables for values that are fetched differently depending on device wiring
             let received = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}tx_bytes`) || 0;
             let sent = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}rx_bytes`) || 0;
             let uptime = getStateValue(`${idDevice}.uptime`);
-            let speedText = '';
-            let speedLevel = 'none';
+            let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
 
-            if (isWired) {
-                // If exists prefer uptime on switch port
-                uptime = getStateValue(`${idDevice}.uptime_by_usw`) || uptime;
+            let additionalInfotems = '';
+            const infoItem = (icon, color, text) => `<span style="margin: 0 2px">
+                <span class="mdi ${icon}" style="color: ${color}; font-size: ${infoIconSize}px; "></span>
+                <span style="color: grey; font-family: RobotoCondensed-LightItalic; font-size: ${infoTextSize}px; margin-left: 2px;">${text}</span>
+                </span>`;
 
-                let switchMac = getStateValue(`${idDevice}.sw_mac`) || false;
-                let switchPort = getStateValue(`${idDevice}.sw_port`) || false;
+            if (unifiDevice) {
+                let cpu = getStateValue(`${idDevice}.system-stats.cpu`) || 0;
+                let mem = getStateValue(`${idDevice}.system-stats.mem`) || 0;
+                let cpuPerformance = !isConnected ? 'none' : (cpu <= 50 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
+                let memPerformance = !isConnected ? 'none' : (mem <= 50 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
 
-                if (switchMac && switchPort) {
-                    let speed = getStateValue(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`);
-                    speedText = Number(speed).toString().replace('1000', '1.000') + ' MBit/s';
-                    speedLevel = !isConnected ? 'none' : (speed == 1000 ? 'fast' : 'medium');
-                }
-
-                // Do not consider fiber ports
-                if (switchPort > 24) {
-                    continue; // Skip device
-                }
+                additionalInfotems += infoItem('mdi-cpu-64-bit', performances[cpuPerformance].color, `${cpu}%`);
+                additionalInfotems += infoItem('mdi-memory', performances[memPerformance].color, `${mem}%`);
             } else {
-                let channel = getStateValue(`${idDevice}.channel`);
-                let signal = getStateValue(`${idDevice}.signal`);
-                speedText = channel === null ? '' : (channel > 13 ? '5G' : '2G');
-                speedLevel = !isConnected ? 'none' : (signal >= -55 ? 'fast' : (signal >= -70 ? 'medium' : 'slow'));
+                let experiencePerformance = !isConnected ? 'none' : (experience >= 70 ? 'good' : (experience >= 40 ? 'low' : 'bad'));
+                let speedText = '';
+                let speedPerformance = 'none';
+
+                if (isWired) {
+                    // If exists prefer uptime on switch port
+                    uptime = getStateValue(`${idDevice}.uptime_by_usw`) || uptime;
+
+                    let switchMac = getStateValue(`${idDevice}.sw_mac`) || false;
+                    let switchPort = getStateValue(`${idDevice}.sw_port`) || false;
+
+                    if (switchMac && switchPort) {
+                        let speed = getStateValue(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`);
+                        speedText = Number(speed).toString() + ' mbps';
+                        speedPerformance = !isConnected ? 'none' : (speed == 1000 ? 'good' : 'low');
+                    }
+
+                    // Do not consider fiber ports
+                    if (switchPort > 24) {
+                        continue; // Skip device
+                    }
+                } else {
+                    let channel = getStateValue(`${idDevice}.channel`);
+                    let signal = getStateValue(`${idDevice}.signal`);
+                    speedText = channel === null ? '' : (channel > 13 ? '5G' : '2G');
+                    speedPerformance = !isConnected ? 'none' : (signal >= -55 ? 'good' : (signal >= -70 ? 'low' : 'bad'));
+                }
+
+                additionalInfotems += infoItem(performances[speedPerformance][isWired ? 'speedLan' : 'speedWifi'], performances[speedPerformance].color, speedText);
+                additionalInfotems += infoItem(performances[experiencePerformance].experience, performances[experiencePerformance].color, `${experience}%`);
             }
 
             deviceList.push({
@@ -176,26 +203,23 @@ function createList() {
                 subText: `
                     ${ip}
                     <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; align-items: center; justify-content: center;">
-                        <span style="color: gray; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">
+                        <span style="color: grey; font-size: ${offlineTextSize}px; line-height: 1.3; font-family: RobotoCondensed-LightItalic;">
                             ${translate(isConnected ? 'online' : 'offline')} ${(isConnected ? moment().subtract(uptime, 's') : moment(lastSeen)).fromNow()}
                         </span>
                     </div>
-                    <div style="display: flex; flex-direction: row; padding-left: 8px; padding-right: 8px; margin-top: 10px; align-items: center;">
+                    <div style="display: flex; flex-direction: row; padding-left: 4px; padding-right: 4px; margin-top: 10px; align-items: center;">
                         <div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                            <span class="mdi ${levelMaps[speedLevel][isWired ? 'speedLan' : 'speedWifi']}" style="color: ${levelMaps[speedLevel].color}; font-size: ${speedIconSize}px"></span>
-                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${speedTextSize}px; margin-left: 4px;">${speedText}</span>
+                            ${infoItem('mdi-arrow-down', '#44739e', formatBytes(received, byteUnits))}
+                            ${infoItem('mdi-arrow-up', '#44739e', formatBytes(sent, byteUnits))}
                         </div>                       
-                        <span class="mdi mdi-arrow-down" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px; margin-right: 4px">${formatBytes(received, byteDecimals, byteUnits)}</span>
-                        <span class="mdi mdi-arrow-up" style="font-size: ${trafficIconSize}px; color: #44739e;"></span><span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${trafficTextSize}px; margin-left: 2px;">${formatBytes(sent, byteDecimals, byteUnits)}</span>
                         <div style="display: flex; margin-left: 8px; align-items: center;">
-                            <span class="mdi mdi-speedometer${levelMaps[experienceLevel].experience}" style="color: ${levelMaps[experienceLevel].color}; font-size: ${experienceIconSize}px;"></span>
-                            <span style="color: gray; font-family: RobotoCondensed-LightItalic; font-size: ${experienceTextSize}px; margin-left: 4px;">${experience} %</span>
+                            ${additionalInfotems}
                         </div>
                     </div>
                 `,
                 listType: !note.link ? 'text' : 'buttonLink',
                 buttonLink: !note.link ? '' : (['http', 'https'].includes(note.link) ? `${note.link}://${ip}` : note.link),
-                image: imagePath + ((note && note.image) ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png',
+                image: unifiDevice ? getUnifiImage(getStateValue(`${idDevice}.model`)) : (imagesPath + (note.image ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png'),
                 icon: note.icon || '',
                 
                 // Additional data for sorting
@@ -464,7 +488,7 @@ function translate(enText) {
     return (map[enText] || {})[locale] || enText;
 }
 
-function formatBytes(bytes, decimals?: number, unit?: 'SI' | 'IEC') : string  {
+function formatBytes(bytes, unit?: 'SI' | 'IEC') : string  {
     if (bytes === 0) return 'N/A';
 
     const orderOfMagnitude = unit === 'SI' ? Math.pow(10, 3) : Math.pow(2, 10);
@@ -473,5 +497,25 @@ function formatBytes(bytes, decimals?: number, unit?: 'SI' | 'IEC') : string  {
         ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
     const i = Math.floor(Math.log(bytes) / Math.log(orderOfMagnitude));
 
-    return parseFloat((bytes / Math.pow(orderOfMagnitude, i)).toFixed(decimals || 2)) + ' ' + abbreviations[i];
+    return parseFloat((bytes / Math.pow(orderOfMagnitude, i)).toFixed(3).substring(0, 4)) + ' ' + abbreviations[i];
+}
+
+function getUnifiImage(deviceModel: string): string {
+    // For unifi devices, there is no 'note' where the an image information can be placed, but we have the
+    // device 'model' that provides enough information for the diaply of the correct image.
+    // The images themselves are on your network, hosted by the UniFi controller for its devices grid view.
+    // Example for my 3 device models (extract with develppper console, see backround-image of element):
+    //  * US16P150: https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/usw/US16/grid.png
+    //  * U7LT:     https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/uap/default/grid.png
+    //  * UGW3:     https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/ugw/UGW3/grid.png
+    // From the divice model we need some insight to get to the image URL, this is provided by the app.css
+    // of the Unifi Controller (I used mine with version 5.13.29)
+    // List obtained with some reverse engeeniring: downloaded minified app.css, reformatted code with Phpstorm, then regex-replace: "\.unifiDeviceIcon--([^.]+)\.is-grid[^{]+\{\s+background-image: url\("\.\./images/devices/([^"]+)grid\.png\"\)" with "deviceModel['$1'] = '$2';", ant then some additional parsing ..
+    const unifiControllerimagesPaths = {BZ2: 'uap/BZ2', BZ2LR: 'uap/BZ2', p2N: 'uap/p2N', U2HSR: 'uap/U2HSR', U2IW: 'uap/U2IW', U2L48: 'uap/BZ2', U2Lv2: 'uap/BZ2', U2M: 'uap/default', U2O: 'uap/U2O', U2S48: 'uap/BZ2', U2Sv2: 'uap/BZ2', U5O: 'uap/U2O', U7E: 'uap/U7E', U7EDU: 'uap/U7EDU', U7Ev2: 'uap/U7E', U7HD: 'uap/default', U7IW: 'uap/U7IW', U7IWP: 'uap/U7IW', U7LR: 'uap/default', U7LT: 'uap/default', U7MP: 'uap/U7O', U7MSH: 'uap/U7MSH', U7NHD: 'uap/U7NHD', U7O: 'uap/U7O', UFLHD: 'uap/UFLHD', U7P: 'uap/default', U7PG2: 'uap/default', U7SHD: 'uap/default', UCMSH: 'uap/default', UCXG: 'uap/default', UHDIW: 'uap/U7IW', ULTE: 'uap/ULTE', UXSDM: 'uap/UXSDM', UXBSDM: 'uap/UXBSDM', UDMB: 'uap/UDMB', UP1: 'uap/UP1', UBB: 'ubb/UBB', UGW3: 'ugw/UGW3', UGW4: 'ugw/UGW4', UGWXG: 'ugw/UGWXG', S216150: 'usw/US16', S224250: 'usw/US24', S224500: 'usw/US24', S248500: 'usw/US48', S248750: 'usw/US48', S28150: 'usw/US8P150', UDC48X6: 'usw/UDC48X6', US16P150: 'usw/US16', US24: 'usw/US24', US24P250: 'usw/US24', US24P500: 'usw/US24', US24PL2: 'usw/US24', US24PRO: 'usw/US24PRO', US24PRO2: 'usw/US24PRO2', US48: 'usw/US48', US48P500: 'usw/US48', US48P750: 'usw/US48', US48PL2: 'usw/US48', US48PRO: 'usw/US48PRO', US48PRO2: 'usw/US48PRO2', US6XG150: 'usw/US6XG150', US8: 'usw/US8', US8P150: 'usw/US8P150', US8P60: 'usw/US8P60', USC8: 'usw/US8', USC8P450: 'usw/USC8P450', USF5P: 'usw/USF5P', USXG: 'usw/USXG', USL8LP: 'usw/USL8LP', USL16LP: 'usw/USL16LP', USL16P: 'usw/USL16P', USL24: 'usw/USL24', USL48: 'usw/USL48', USL24P: 'usw/USL24P', USL48P: 'usw/USL48P', USMINI: 'usw/USMINI', USPRPS: 'usw/USPRPS', UAS: 'uas/UAS', UCK: 'uas/UCK', UCKG2: 'uas/UCKG2', UCKP: 'uas/UCKP', UMAD: 'ua/UMAD', UDM: 'udm/UDM', 'UDM-UAP': 'udm/UDM-UAP', 'UDM-USW': 'udm/UDM-USW', 'UDM-UGW': 'udm/UDM-UGW', UDMSE: 'udm/UDMSE', 'UDMSE-UAP': 'udm/UDM-UAP', 'UDMSE-USW': 'udm/UDM-USW', 'UDMSE-UGW': 'udm/UDM-UGW', UDMPRO: 'udm/UDMPRO', 'UDMPRO-USW': 'udm/UDMPRO-USW', 'UDMPRO-UGW': 'udm/UDMPRO-UGW'};
+
+    if (!unifiImagesUrlPrefix) {
+        return imagesPath + (unifiImagesUrlPrefix === null ? 'lan_noImage' : deviceModel) + '.png';
+    }
+
+    return unifiImagesUrlPrefix + unifiControllerimagesPaths[deviceModel] + '/grid.png';
 }
