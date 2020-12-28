@@ -4,7 +4,7 @@
  * Requirements:
  *  - UniFi controller running on your network
  *  - UniFi ioBroker adapter >= 0.5.8 (https://www.npmjs.com/package/iobroker.unifi)
- *  - Libraries "mathjs" and "moment" in the "Additional npm modules" of the javascript.0 adapter configuration
+ *  - Library "moment" in the "Additional npm modules" of the javascript.0 adapter configuration
  *  - Some programming skills
  *
  * @license http://www.opensource.org/licenses/mit-license.html  MIT License
@@ -70,10 +70,8 @@ const levelMaps = {
 
 
 // **********************************************************************************************************************************************************************
-// Libs, no need to 'require' or 'import' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module)
-// But to avoid TypeScript inspection errors, doing it anyway ...
-// @ts-ignore
-const mathjs = require('mathjs');
+// Libss, should not need to 'require' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module),
+// but to avoid TypeScript inspection errors, doing it anyway ...
 // @ts-ignore
 const moment = require('moment');
 
