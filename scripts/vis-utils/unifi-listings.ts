@@ -16,7 +16,7 @@
 
 // Script configuration
 const statePrefix = '0_userdata.0.vis.unifiNetworkState'; // Might be better to use an english statePrefix (e.g. '0_userdata.0.vis.unifiNetworkState'), but then remember to adapt the Views too
-const locale = 'it'; // On change make sure you drop all states (delete statePrefix directory)
+const defaultLocale = 'de'; 
 
 const lastDays = 7;       // Show devices that have been seen in the network within the last X days
 const updateInterval = 1; // Lists update interval in minutes (modulo on current minutes, therefore more than 30 means once per hour, more than 60 means never)
@@ -78,32 +78,59 @@ const moment = require('moment');
 // Initialization create/delete states, register listeners
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
 declare function runAfterInitialization(callback: CallableFunction): void;
-declare function initializeState(stateId: string, defaultValue: any, common: object, listenerProps?: boolean, listenerCallback?: CallableFunction): void;
+declare function initializeState(stateId: string, defaultValue: any, common: object, listenerProps?: object, listenerCallback?: CallableFunction): void;
 declare function getStateIfExists(stateId: string): any;
 declare function getStateValue(stateId: string): any;
 
+const getLocale = () => getStateValue('0_userdata.0.vis.locale') || defaultLocale;
 
-// States are registered automatically if statePrefix directory does not exists (delete directory to recreate them)
-setup();
 
-// Create lists on script startup
-createList();
-
-// Refresh lists every updateInterval minutes
-schedule(`*/${updateInterval} * * * *`, createList);
+initializeState(`${statePrefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
 
 // Change on sort mode triggers list generation and reset of sort-timer-reset
-on({id: `${statePrefix}.sortMode`, change: 'any'}, () => { createList(); resetSortTimer(); });
+initializeState(`${statePrefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'}, {change: 'any'}, () => { updateDeviceLists(); resetSortTimer(); });
 
 // Change on filter mode triggers list generation and reset of filter-timer-reset
-on({id: `${statePrefix}.filterMode`, change: 'any'}, () => { createList(); resetFilterTimer(); });
+initializeState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'}, {change: 'any'}, () => { updateDeviceLists(); resetFilterTimer(); });
+
+// Sorters, filters and some additional translations are saved in states to permit texts localization
+initializeState(`${statePrefix}.sortersJsonList`, '{}', {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
+initializeState(`${statePrefix}.filtersJsonList`, '{}', {name: 'UniFi device listing: filtersJsonList', type: 'string', read: true, write: false});
+initializeState(`${statePrefix}.translations`, '{}', {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
+
+if (devicesView) {
+    initializeState(`${statePrefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
+    initializeState(`${statePrefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'});
+}
+
+// On locale change, setup correct listings
+if (existsState('0_userdata.0.vis.locale')) {
+    runAfterInitialization(() => on({id: '0_userdata.0.vis.locale', change: 'ne'}, setup));
+}
+
+runAfterInitialization(() => {
+    setup();
+
+    // Refresh lists every updateInterval minutes
+    schedule(`*/${updateInterval} * * * *`, updateDeviceLists);
+});
 
 if (devicesView) {
     // On selected device change, go to "Devices" view
     on({id: `${statePrefix}.selectedUrl`, change: 'any'}, () => { setState(devicesView.currentViewState, devicesView.devicesViewKey); });
 }
 
-function createList() {
+function setup(): void {
+    setTimeLocale();
+    setSortItems();
+    setFilterItems();
+    setViewTranslations();
+
+    // Fill lists
+    updateDeviceLists();
+}
+
+function updateDeviceLists() {
     const getNote = (idDevice, name, mac, ip) => {
         try {
             return JSON.parse(getStateValue(`${idDevice}.note`) || '{}');
@@ -117,13 +144,12 @@ function createList() {
     try {
         // Selector help: https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#---selector
         let devices = $('state[id=unifi\.0\.default\.*\.*\.mac]'); // Query every time function is called (for new devices)
-
         let deviceList = [];
       
         for (var i = 0; i <= devices.length - 1; i++) {
             let [,,, deviceType, mac] = devices[i].split('.');
 
-            // Only 'clients' and 'devices' are allowed
+            // Only 'clients' and 'devices' are allowed (not 'alerts' ... can't exclude direclty on selector ...)
             if (!['clients', 'devices'].includes(deviceType)) {
                 continue;
             }
@@ -131,16 +157,15 @@ function createList() {
             let idDevice = devices[i].replace('.mac', '');
             let unifiDevice = deviceType === 'devices';
             let isWired = getStateValue(`${idDevice}.is_wired`) || unifiDevice;
-
             let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
 
-            // For clients, if lastSeen deifference is bigger than lastDays, then skip the device
+            // For clients, if lastSeen difference is bigger than lastDays, then skip the device
             if (!unifiDevice && (new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
                 continue;
             }
 
             // Values for all device types and connection
-            let isConnected = unifiDevice || getStateValue(`${idDevice}.is_online`);
+            let isConnected = getStateValue(`${idDevice}.is_online`) || unifiDevice;
             let ip = getStateValue(`${idDevice}.ip`) || '';
             let name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
             let isGuest = getStateValue(`${idDevice}.is_guest`);
@@ -150,7 +175,7 @@ function createList() {
             let uptime = getStateValue(`${idDevice}.uptime`);
             let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
 
-            let additionalInfotems = '';
+            let additionalInfoItems = '';
             const infoItem = (icon, color, text) => `<span style="margin: 0 2px">
                 <span class="mdi mdi-${icon}" style="color: ${color}; font-size: ${infoIconSize}px; "></span>
                 <span style="color: grey; font-family: RobotoCondensed-LightItalic; font-size: ${infoTextSize}px; margin-left: 2px;">${text}</span>
@@ -163,8 +188,8 @@ function createList() {
                 let memPerformance = !isConnected ? 'none' : (mem <= 50 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
 
                 // The icons do not really fit, there is no good option for a "ram memory bank" in https://materialdesignicons.com/ 
-                additionalInfotems += infoItem(/*'cpu-64-bit'*/ 'memory', performances[cpuPerformance].color, `${cpu}%`);
-                additionalInfotems += infoItem(/*'memory' 'expansion-card-variant'*/ 'sd', performances[memPerformance].color, `${mem}%`);
+                additionalInfoItems += infoItem(/*'cpu-64-bit'*/ 'memory', performances[cpuPerformance].color, `${cpu}%`);
+                additionalInfoItems += infoItem(/*'memory' 'expansion-card-variant'*/ 'sd', performances[memPerformance].color, `${mem}%`);
             } else {
                 let experiencePerformance = !isConnected ? 'none' : (experience >= 70 ? 'good' : (experience >= 40 ? 'low' : 'bad'));
                 let speedText = '';
@@ -178,24 +203,26 @@ function createList() {
                     let switchPort = getStateValue(`${idDevice}.sw_port`) || false;
 
                     if (switchMac && switchPort) {
-                        let speed = getStateValue(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`);
-                        speedText = Number(speed).toString() + ' mbps';
+                        let speed = getStateValue(`unifi.0.default.devices.${switchMac}.port_table.port_${switchPort}.speed`) || 0;
+                        speedText = speed === 0 ? '' : (speed < 1000 ? (speed + ' Mbit/s') : (speed/1000 + ' Gbit/s'));
                         speedPerformance = !isConnected ? 'none' : (speed == 1000 ? 'good' : 'low');
                     }
 
                     // Do not consider fiber ports
-                    if (switchPort > 24) {
+                    if (switchPort > 24) { // @todo  On some switches the fiber port is already on port 9 .. there are surely better ways to recognise a fiber port
+                        // @todo This is legacy code, why are devices connected to fiber ports not of interest?
                         continue; // Skip device
                     }
                 } else {
                     let channel = getStateValue(`${idDevice}.channel`);
                     let signal = getStateValue(`${idDevice}.signal`);
+
                     speedText = channel === null ? '' : (channel > 13 ? '5G' : '2G');
                     speedPerformance = !isConnected ? 'none' : (signal >= -55 ? 'good' : (signal >= -70 ? 'low' : 'bad'));
                 }
 
-                additionalInfotems += infoItem(performances[speedPerformance][isWired ? 'speedLan' : 'speedWifi'], performances[speedPerformance].color, speedText);
-                additionalInfotems += infoItem(performances[experiencePerformance].experience, performances[experiencePerformance].color, `${experience}%`);
+                additionalInfoItems += infoItem(performances[speedPerformance][isWired ? 'speedLan' : 'speedWifi'], performances[speedPerformance].color, speedText);
+                additionalInfoItems += infoItem(performances[experiencePerformance].experience, performances[experiencePerformance].color, `${experience}%`);
             }
 
             deviceList.push({
@@ -215,7 +242,7 @@ function createList() {
                             ${infoItem('arrow-up', '#44739e', formatBytes(sent, byteUnits))}
                         </div>                       
                         <div style="display: flex; margin-left: 8px; align-items: center;">
-                            ${additionalInfotems}
+                            ${additionalInfoItems}
                         </div>
                     </div>
                 `,
@@ -224,7 +251,7 @@ function createList() {
                 image: unifiDevice ? getUnifiImage(getStateValue(`${idDevice}.model`)) : (imagesPath + (note.image ? note.image : ((isWired ? 'lan' : 'wlan') + '_noImage')) + '.png'),
                 icon: note.icon || '',
                 
-                // Additional data for sorting
+                // Additional data used for list sorting
                 name: name,
                 ip: ip,
                 connected: isConnected,
@@ -238,7 +265,7 @@ function createList() {
         }
 
         // Sorting
-        let sortMode = getStateValue(`${statePrefix}.sortMode`) || defaultSortMode;
+        let sortMode = getStateValue(`${statePrefix}.sortMode`);
 
         deviceList.sort((a, b) => {
             switch (sortMode) {
@@ -254,7 +281,7 @@ function createList() {
                     return a[sortMode] === b[sortMode] ? 0 : +(a[sortMode] < b[sortMode]) || -1;
                 case 'name':
                 default:
-                    return a['name'].localeCompare(b['name'], locale, {sensitivity: 'base'});
+                    return a['name'].localeCompare(b['name'], getLocale(), {sensitivity: 'base'});
             }
         });
 
@@ -269,10 +296,11 @@ function createList() {
                         text: obj.name,
                         value: obj.buttonLink,
                         icon: obj.icon
-                         /** @todo Add some props (connected, ip, received, sent, experience, ...)? */
+                        /** @todo Add some properties (connected, ip, received, sent, experience, ...)? */
                     });
 
-                    // Change behaviour to buttonState, a listener on the state change on objectId will trigger the jump to that view
+                    // Change behaviour from 'buttonLink' to 'buttonState', 
+                    // a listener on the state change of the objectId will trigger the jump to the devices view
                     obj['listType'] = 'buttonState';
                     obj['objectId'] = `${statePrefix}.selectedUrl`;
                     obj['showValueLabel'] = false;
@@ -316,8 +344,8 @@ function createList() {
             setState(`${statePrefix}.jsonList`, result, true);
         }
     } catch (err) {
-        console.error(`[createList] error: ${err.message}`);
-        console.error(`[createList] stack: ${err.stack}`);
+        console.error(`[updateDeviceLists] error: ${err.message}`);
+        console.error(`[updateDeviceLists] stack: ${err.stack}`);
     }
 }
 
@@ -325,7 +353,7 @@ let sortTimeoutID;
 
 function resetSortTimer() {
     if (sortResetAfter > 0) {
-        this.clearTimeout(sortTimeoutID); // Clear previous timer, if set
+        this.clearTimeout(sortTimeoutID); // If set then clear previous timer
 
         sortTimeoutID = this.setTimeout(() => setState(`${statePrefix}.sortMode`, defaultSortMode), sortResetAfter * 1000);
     }
@@ -335,13 +363,15 @@ let filterTimeoutID;
 
 function resetFilterTimer() {
     if (filterResetAfter > 0) {
-        this.clearTimeout(filterTimeoutID); // Clear previous timer, if set
+        this.clearTimeout(filterTimeoutID); // If set then clear previous timer
 
         filterTimeoutID = this.setTimeout(() => setState(`${statePrefix}.filterMode`, ''), filterResetAfter * 1000);
     }
 }
 
-function setup() {
+function setTimeLocale(): void {
+    let locale = getLocale();
+
     moment.locale(locale);
     moment.updateLocale(locale, {
         relativeTime: {
@@ -363,10 +393,12 @@ function setup() {
             yy: translate('%d years')
         }
     });
+}
 
-    // Create states
-    if (!existsState(statePrefix)) { // Check on statePrefix (the directory)
-        const sortItems = [
+function setSortItems(): void {
+    setState(
+        `${statePrefix}.sortersJsonList`, 
+        JSON.stringify([
             {
                 text: translate('Name'),
                 value: 'name',
@@ -402,9 +434,15 @@ function setup() {
                 value: 'uptime',
                 icon: 'clock-check-outline'
             }
-        ];
+        ]),
+        true
+    );
+}
 
-        const filterItems = [
+function setFilterItems(): void {
+    setState(
+        `${statePrefix}.filtersJsonList`, 
+        JSON.stringify([
             {
                 text: translate('connected'),
                 value: 'connected',
@@ -430,28 +468,21 @@ function setup() {
                 value: 'unifi',
                 icon: 'router-network'
             }
-        ];
+        ]),
+        true
+    );
+}
 
-        const viewTranslations = [
+function setViewTranslations(): void {
+    setState(
+        `${statePrefix}.translations`,
+        JSON.stringify([
             'Sort by',
             'Filter by',
             'Device'
-        ].reduce((o, key) => ({ ...o, [key]: translate(key)}), {});
-
-        createState(`${statePrefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
-        createState(`${statePrefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'});
-        createState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'});
-
-        // Sorters, filters and some additional translations are saved in states to permit texts localization
-        createState(`${statePrefix}.sortersJsonList`, JSON.stringify(sortItems), {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
-        createState(`${statePrefix}.filtersJsonList`, JSON.stringify(filterItems), {name: 'UniFi device listing: filtersJsonList', type: 'string', read: true, write: false});
-        createState(`${statePrefix}.translations`, JSON.stringify(viewTranslations), {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
-
-        if (devicesView) {
-            createState(`${statePrefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
-            createState(`${statePrefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'});
-        }
-    }
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
+        true
+    );
 }
 
 function translate(enText) {
@@ -496,7 +527,7 @@ function translate(enText) {
         '%d years': {de: '%d Jahre', ru: '%d лет', pt: '%d anos', nl: '%d jaar', fr: '%d années', it: '%d anni', es: '%d años', pl: '%d lat','zh-cn': '％d年'}
     };
 
-    return (map[enText] || {})[locale] || enText;
+    return (map[enText] || {})[getLocale()] || enText;
 }
 
 function formatBytes(bytes, unit?: 'SI' | 'IEC') : string  {
