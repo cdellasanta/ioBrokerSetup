@@ -457,8 +457,8 @@ function translate(enText) {
         // Filter Items
         'connected': {de: 'verbunden', ru: 'связано', pt: 'conectado', nl: 'verbonden', fr: 'connecté', it: 'collegato', es: 'conectado', pl: 'połączony','zh-cn': '连接的'},
         'disconnected': {de: 'nicht verbunden', ru: 'отключен', pt: 'desconectado', nl: 'losgekoppeld', fr: 'débranché', it: 'disconnesso', es: 'desconectado', pl: 'niepowiązany','zh-cn': '断开连接'},
-        'LAN connection': {de: 'LAN Verbindungen', ru: 'подключение по локальной сети', pt: 'conexão LAN', nl: 'lAN-verbinding', fr: 'connexion LAN', it: 'connessione LAN', es: 'coneccion LAN', pl: 'Połączenie LAN','zh-cn': '局域网连接'},
-        'WLAN connection': {de: 'WLAN Verbindungen', ru: 'Соединение WLAN', pt: 'Conexão WLAN', nl: 'WLAN-verbinding', fr: 'Connexion WLAN', it: 'Connessione WLAN', es: 'Conexión WLAN', pl: 'Połączenie WLAN','zh-cn': 'WLAN连接'},
+        'LAN connection': {de: 'LAN Verbindungen', ru: 'подключение по локальной сети', pt: 'conexão LAN', nl: 'LAN-verbinding', fr: 'connexion LAN', it: 'connessione LAN', es: 'coneccion LAN', pl: 'połączenie LAN','zh-cn': '局域网连接'},
+        'WLAN connection': {de: 'WLAN Verbindungen', ru: 'поединение WLAN', pt: 'conexão WLAN', nl: 'WLAN-verbinding', fr: 'connexion WLAN', it: 'connessione WLAN', es: 'conexión WLAN', pl: 'połączenie WLAN','zh-cn': 'WLAN连接'},
         // Additional view translations
         'Sort by': {de: 'Sortieren nach', ru: 'Сортировать по', pt: 'Ordenar por', nl: 'Sorteer op', fr: 'Trier par', it: 'Ordina per', es: 'Ordenar por', pl: 'Sortuj według', 'zh-cn': '排序方式'},
         'Filter by': {de: 'Filtern nach', ru: 'Сортировать по', pt: 'Filtrar por', nl: 'Filteren op', fr: 'Filtrer par', it: 'Filtra per', es: 'Filtrado por', pl: 'Filtruj według','zh-cn': '过滤'},
