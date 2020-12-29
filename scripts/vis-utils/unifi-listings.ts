@@ -31,6 +31,7 @@ const filterResetAfter = 120;   // Reset filter after X seconds (0=disabled)
 const imagesPath = '/vis.0/myImages/networkDevices/'; // Path for images
 
 // Optional: Path prefix for UniFi device images (see getUnifiImage function for deeper information on how to extract it for your network)
+// @todo Could take controller host and port from the unifi adapter configuration, but thene there is still the angular subdirectory that needs to be configured .. 
 // If set to null will use the 'lan_noImage.png' for all devices, if set to false will use '<device model>.png' from your imagesPath
 const unifiImagesUrlPrefix = 'https://controller.dsnet.me:8443/manage/angular/g7989b19/images/devices/';
     
@@ -43,27 +44,27 @@ const infoTextSize = 14;
 const performances = {
 	none: {
 		color: 'grey',
-		experience: 'mdi-speedometer',
-		speedLan: 'mdi-network-off',
-		speedWifi: 'mdi-wifi-off'
+		experience: 'speedometer',
+		speedLan: 'network-off',
+		speedWifi: 'wifi-off'
 	},
 	good: {
 		color: 'green',
-		experience: 'mdi-speedometer',
-		speedLan: 'mdi-network',
-		speedWifi: 'mdi-signal-cellular-3'
+		experience: 'speedometer',
+		speedLan: 'network',
+		speedWifi: 'signal-cellular-3'
 	},
 	low: {
 		color: '#ff9800',
-		experience: 'mdi-speedometer-medium',
-		speedLan: 'mdi-network',
-		speedWifi: 'mdi-signal-cellular-2'
+		experience: 'speedometer-medium',
+		speedLan: 'network',
+		speedWifi: 'signal-cellular-2'
 	},
 	bad: {
 		color: 'FireBrick',
-		experience: 'mdi-speedometer-slow',
-		speedLan: 'mdi-network',
-		speedWifi: 'mdi-signal-cellular-1'
+		experience: 'speedometer-slow',
+		speedLan: 'network',
+		speedWifi: 'signal-cellular-1'
 	}
 };
 
@@ -129,7 +130,7 @@ function createList() {
 
             let idDevice = devices[i].replace('.mac', '');
             let unifiDevice = deviceType === 'devices';
-            let isWired = getStateValue(`${idDevice}.is_wired`);
+            let isWired = getStateValue(`${idDevice}.is_wired`) || unifiDevice;
 
             let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
 
@@ -144,14 +145,14 @@ function createList() {
             let name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
             let isGuest = getStateValue(`${idDevice}.is_guest`);
             let note = getNote(idDevice, name, mac, ip);
-            let received = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}tx_bytes`) || 0;
-            let sent = getStateValue(`${idDevice}.${isWired ? 'wired-' : ''}rx_bytes`) || 0;
+            let received = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}tx_bytes`) || 0;
+            let sent = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}rx_bytes`) || 0;
             let uptime = getStateValue(`${idDevice}.uptime`);
             let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
 
             let additionalInfotems = '';
             const infoItem = (icon, color, text) => `<span style="margin: 0 2px">
-                <span class="mdi ${icon}" style="color: ${color}; font-size: ${infoIconSize}px; "></span>
+                <span class="mdi mdi-${icon}" style="color: ${color}; font-size: ${infoIconSize}px; "></span>
                 <span style="color: grey; font-family: RobotoCondensed-LightItalic; font-size: ${infoTextSize}px; margin-left: 2px;">${text}</span>
                 </span>`;
 
@@ -161,8 +162,9 @@ function createList() {
                 let cpuPerformance = !isConnected ? 'none' : (cpu <= 50 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
                 let memPerformance = !isConnected ? 'none' : (mem <= 50 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
 
-                additionalInfotems += infoItem('mdi-cpu-64-bit', performances[cpuPerformance].color, `${cpu}%`);
-                additionalInfotems += infoItem('mdi-memory', performances[memPerformance].color, `${mem}%`);
+                // The icons do not really fit, there is no good option for a "ram memory bank" in https://materialdesignicons.com/ 
+                additionalInfotems += infoItem(/*'cpu-64-bit'*/ 'memory', performances[cpuPerformance].color, `${cpu}%`);
+                additionalInfotems += infoItem(/*'memory' 'expansion-card-variant'*/ 'sd', performances[memPerformance].color, `${mem}%`);
             } else {
                 let experiencePerformance = !isConnected ? 'none' : (experience >= 70 ? 'good' : (experience >= 40 ? 'low' : 'bad'));
                 let speedText = '';
@@ -209,8 +211,8 @@ function createList() {
                     </div>
                     <div style="display: flex; flex-direction: row; padding-left: 4px; padding-right: 4px; margin-top: 10px; align-items: center;">
                         <div style="display: flex; flex: 1; text-align: left; align-items: center; position: relative;">
-                            ${infoItem('mdi-arrow-down', '#44739e', formatBytes(received, byteUnits))}
-                            ${infoItem('mdi-arrow-up', '#44739e', formatBytes(sent, byteUnits))}
+                            ${infoItem('arrow-down', '#44739e', formatBytes(received, byteUnits))}
+                            ${infoItem('arrow-up', '#44739e', formatBytes(sent, byteUnits))}
                         </div>                       
                         <div style="display: flex; margin-left: 8px; align-items: center;">
                             ${additionalInfotems}
@@ -230,7 +232,8 @@ function createList() {
                 sent: sent,
                 experience: experience,
                 uptime: uptime,
-                isWired: isWired
+                isWired: isWired,
+                isUnifi: unifiDevice
             });
         }
 
@@ -299,6 +302,8 @@ function createList() {
                         return item.isWired;
                     case 'wlan':
                         return !item.isWired;
+                    case 'unifi':
+                        return item.isUnifi;
                     default:
                         return false; // Unknown filter, return no item
                 }
@@ -419,6 +424,11 @@ function setup() {
                 text: translate('WLAN connection'),
                 value: 'wlan',
                 icon: 'wifi'
+            },
+            {
+                text: translate('UniFi network devices'),
+                value: 'unifi',
+                icon: 'router-network'
             }
         ];
 
@@ -459,6 +469,7 @@ function translate(enText) {
         'disconnected': {de: 'nicht verbunden', ru: 'отключен', pt: 'desconectado', nl: 'losgekoppeld', fr: 'débranché', it: 'disconnesso', es: 'desconectado', pl: 'niepowiązany','zh-cn': '断开连接'},
         'LAN connection': {de: 'LAN Verbindungen', ru: 'подключение по локальной сети', pt: 'conexão LAN', nl: 'LAN-verbinding', fr: 'connexion LAN', it: 'connessione LAN', es: 'coneccion LAN', pl: 'połączenie LAN','zh-cn': '局域网连接'},
         'WLAN connection': {de: 'WLAN Verbindungen', ru: 'поединение WLAN', pt: 'conexão WLAN', nl: 'WLAN-verbinding', fr: 'connexion WLAN', it: 'connessione WLAN', es: 'conexión WLAN', pl: 'połączenie WLAN','zh-cn': 'WLAN连接'},
+        'UniFi network devices': {de: 'UniFi-Netzwerkgeräte', ru: 'Сетевые устройства UniFi', pt: 'Dispositivos de rede UniFi', nl: 'UniFi-netwerkapparaten', fr: 'Périphériques réseau UniFi', it: 'Dispositivi di rete UniFi', es: 'Dispositivos de red UniFi', pl: 'Urządzenia sieciowe UniFi', 'zh-cn': 'UniFi网络设备'},
         // Additional view translations
         'Sort by': {de: 'Sortieren nach', ru: 'Сортировать по', pt: 'Ordenar por', nl: 'Sorteer op', fr: 'Trier par', it: 'Ordina per', es: 'Ordenar por', pl: 'Sortuj według', 'zh-cn': '排序方式'},
         'Filter by': {de: 'Filtern nach', ru: 'Сортировать по', pt: 'Filtrar por', nl: 'Filteren op', fr: 'Filtrer par', it: 'Filtra per', es: 'Filtrado por', pl: 'Filtruj według','zh-cn': '过滤'},
@@ -501,18 +512,19 @@ function formatBytes(bytes, unit?: 'SI' | 'IEC') : string  {
 }
 
 function getUnifiImage(deviceModel: string): string {
-    // For unifi devices, there is no 'note' where the an image information can be placed, but we have the
-    // device 'model' that provides enough information for the diaply of the correct image.
+    // For unifi devices, there is no 'note' where an image information can be stored, but we have the
+    // device 'model' that provides enough information for the choice of the correct image.
     // The images themselves are on your network, hosted by the UniFi controller for its devices grid view.
-    // Example for my 3 device models (extract with develppper console, see backround-image of element):
+    // Example for my 3 device models (extract using develpper console: see backround-image of element):
     //  * US16P150: https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/usw/US16/grid.png
     //  * U7LT:     https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/uap/default/grid.png
     //  * UGW3:     https://10.10.10.5:8443/manage/angular/g7989b19/images/devices/ugw/UGW3/grid.png
     // From the divice model we need some insight to get to the image URL, this is provided by the app.css
     // of the Unifi Controller (I used mine with version 5.13.29)
-    // List obtained with some reverse engeeniring: downloaded minified app.css, reformatted code with Phpstorm, then regex-replace: "\.unifiDeviceIcon--([^.]+)\.is-grid[^{]+\{\s+background-image: url\("\.\./images/devices/([^"]+)grid\.png\"\)" with "deviceModel['$1'] = '$2';", ant then some additional parsing ..
+    // Following list is obtained with some reverse engeeniring: downloaded minified app.css, reformatted code with Phpstorm, then regex-replace: "\.unifiDeviceIcon--([^.]+)\.is-grid[^{]+\{\s+background-image: url\("\.\./images/devices/([^"]+)grid\.png\"\)" with "deviceModel['$1'] = '$2';", ant then some additional parsing ..
     const unifiControllerimagesPaths = {BZ2: 'uap/BZ2', BZ2LR: 'uap/BZ2', p2N: 'uap/p2N', U2HSR: 'uap/U2HSR', U2IW: 'uap/U2IW', U2L48: 'uap/BZ2', U2Lv2: 'uap/BZ2', U2M: 'uap/default', U2O: 'uap/U2O', U2S48: 'uap/BZ2', U2Sv2: 'uap/BZ2', U5O: 'uap/U2O', U7E: 'uap/U7E', U7EDU: 'uap/U7EDU', U7Ev2: 'uap/U7E', U7HD: 'uap/default', U7IW: 'uap/U7IW', U7IWP: 'uap/U7IW', U7LR: 'uap/default', U7LT: 'uap/default', U7MP: 'uap/U7O', U7MSH: 'uap/U7MSH', U7NHD: 'uap/U7NHD', U7O: 'uap/U7O', UFLHD: 'uap/UFLHD', U7P: 'uap/default', U7PG2: 'uap/default', U7SHD: 'uap/default', UCMSH: 'uap/default', UCXG: 'uap/default', UHDIW: 'uap/U7IW', ULTE: 'uap/ULTE', UXSDM: 'uap/UXSDM', UXBSDM: 'uap/UXBSDM', UDMB: 'uap/UDMB', UP1: 'uap/UP1', UBB: 'ubb/UBB', UGW3: 'ugw/UGW3', UGW4: 'ugw/UGW4', UGWXG: 'ugw/UGWXG', S216150: 'usw/US16', S224250: 'usw/US24', S224500: 'usw/US24', S248500: 'usw/US48', S248750: 'usw/US48', S28150: 'usw/US8P150', UDC48X6: 'usw/UDC48X6', US16P150: 'usw/US16', US24: 'usw/US24', US24P250: 'usw/US24', US24P500: 'usw/US24', US24PL2: 'usw/US24', US24PRO: 'usw/US24PRO', US24PRO2: 'usw/US24PRO2', US48: 'usw/US48', US48P500: 'usw/US48', US48P750: 'usw/US48', US48PL2: 'usw/US48', US48PRO: 'usw/US48PRO', US48PRO2: 'usw/US48PRO2', US6XG150: 'usw/US6XG150', US8: 'usw/US8', US8P150: 'usw/US8P150', US8P60: 'usw/US8P60', USC8: 'usw/US8', USC8P450: 'usw/USC8P450', USF5P: 'usw/USF5P', USXG: 'usw/USXG', USL8LP: 'usw/USL8LP', USL16LP: 'usw/USL16LP', USL16P: 'usw/USL16P', USL24: 'usw/USL24', USL48: 'usw/USL48', USL24P: 'usw/USL24P', USL48P: 'usw/USL48P', USMINI: 'usw/USMINI', USPRPS: 'usw/USPRPS', UAS: 'uas/UAS', UCK: 'uas/UCK', UCKG2: 'uas/UCKG2', UCKP: 'uas/UCKP', UMAD: 'ua/UMAD', UDM: 'udm/UDM', 'UDM-UAP': 'udm/UDM-UAP', 'UDM-USW': 'udm/UDM-USW', 'UDM-UGW': 'udm/UDM-UGW', UDMSE: 'udm/UDMSE', 'UDMSE-UAP': 'udm/UDM-UAP', 'UDMSE-USW': 'udm/UDM-USW', 'UDMSE-UGW': 'udm/UDM-UGW', UDMPRO: 'udm/UDMPRO', 'UDMPRO-USW': 'udm/UDMPRO-USW', 'UDMPRO-UGW': 'udm/UDMPRO-UGW'};
 
+    // If prefix set to null return the 'lan_noImage.png' for all devices, if set to false return '<device model>.png'
     if (!unifiImagesUrlPrefix) {
         return imagesPath + (unifiImagesUrlPrefix === null ? 'lan_noImage' : deviceModel) + '.png';
     }
