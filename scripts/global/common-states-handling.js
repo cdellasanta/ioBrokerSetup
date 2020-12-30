@@ -36,7 +36,7 @@ function initializeState(stateId, defaultValue, common, listenerChangeType = nul
     };
     const myCreateState = () => {
         statesInitializing++;
-        log(`myCreateState: inreased states initializing: ${statesInitializing}`, 'silly');
+        log(`myCreateState: increased states initializing: ${statesInitializing}`, 'silly');
 
         createState(stateId, defaultValue , common, () => {
             log(`Created state ${stateId}`, 'debug');
@@ -49,7 +49,7 @@ function initializeState(stateId, defaultValue, common, listenerChangeType = nul
     };
     const resetState = () => {
         statesInitializing++;
-        log(`resetState: inreased states initializing: ${statesInitializing}`, 'silly');
+        log(`resetState: increased states initializing: ${statesInitializing}`, 'silly');
 
         deleteState(stateId, () => {
             log(`Deleted state ${stateId}`, 'debug');
@@ -71,6 +71,7 @@ function initializeState(stateId, defaultValue, common, listenerChangeType = nul
 }
 
 function getStateIfExists(stateId) {
+    // Avoid warning when state does not exists
     if (!existsState(stateId)) {
         return null;
     }
