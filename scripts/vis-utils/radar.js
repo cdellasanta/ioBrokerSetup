@@ -24,12 +24,12 @@ const getLocale = () => existsState('0_userdata.0.vis.locale') ? getState('0_use
 // Initialization create/delete states, register listeners
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
 
-initializeState(`${statePrefix}.selectedOverlay`, defaultOverlay, {name: 'Selected overlay', type: 'string'}, {change: 'ne'}, obj => updateRadarUrls(obj.state.val));
-initializeState(`${statePrefix}.selectedModel`, defaultModel, {name: 'Selected model', type: 'string'}, {change: 'ne'}, updateRadarUrls);
+initializeState(`${statePrefix}.selectedOverlay`, defaultOverlay, {name: 'Selected overlay', type: 'string'}, 'ne', obj => updateRadarUrls(obj.state.val));
+initializeState(`${statePrefix}.selectedModel`, defaultModel, {name: 'Selected model', type: 'string'}, 'ne', updateRadarUrls);
 initializeState(`${statePrefix}.overlays`, '[]', {name: 'List of radar overlays', type: 'string'});
 initializeState(`${statePrefix}.models`, '[]', {name: 'List of models', type: 'string'});
-initializeState(`${statePrefix}.includeSubOverlays`, false, {name: 'Include list of sub overlays', type: 'boolean'}, {change: 'ne'}, setOverlays);
-initializeState(`${statePrefix}.displayPressureLines`, false, {name: 'Display pressure lines', type: 'boolean'}, {change: 'ne'}, updateRadarUrls);
+initializeState(`${statePrefix}.includeSubOverlays`, false, {name: 'Include list of sub overlays', type: 'boolean'}, 'ne', setOverlays);
+initializeState(`${statePrefix}.displayPressureLines`, false, {name: 'Display pressure lines', type: 'boolean'}, 'ne', updateRadarUrls);
 initializeState(`${statePrefix}.detailUrl`, '', {name: 'Localized radar URL', type: 'string'});
 initializeState(`${statePrefix}.countryUrl`, '', {name: 'Country radar URL', type: 'string'});
 initializeState(`${statePrefix}.continentUrl`, '', {name: 'Continent radar URL', type: 'string'});

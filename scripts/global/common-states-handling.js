@@ -1,4 +1,4 @@
-// My global functions for state and listener intilialization
+// My global functions for state and listener initialization
 // see doc https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#global-functions
 // It works like PHP traits
 // In the script you need to declare them:
@@ -20,14 +20,12 @@ function runAfterInitialization(callback) {
     this.setTimeout(() => runAfterInitialization(callback), 100);
 }
 
-function initializeState(stateId, defaultValue, common, listenerProps = false, listenerCallback = undefined) {
+function initializeState(stateId, defaultValue, common, listenerChangeType = null, listenerCallback = null) {
     const registerListener = () => {
-        if (listenerProps) {
-            listenerProps['id'] = stateId;
-
+        if (listenerChangeType) {
             // Register listener only after all states are initialized
             runAfterInitialization(() => {
-                on(listenerProps, listenerCallback);
+                on(stateId, listenerChangeType, listenerCallback);
                 log(`Registered listener on ${stateId}`, 'debug');
             });
         }
@@ -79,4 +77,3 @@ function getStateIfExists(stateId) {
 function getStateValue(stateId) {
     return (getStateIfExists(stateId) || {}).val || null;
 }
-

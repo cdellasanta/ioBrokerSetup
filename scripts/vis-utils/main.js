@@ -6,7 +6,7 @@ const getLocale = () => existsState(`${statePrefix}.locale`) ? getState(`${state
 // Initialization create/delete states, register listeners
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
 
-initializeState(`${statePrefix}.locale`, defaultLocale, {name: 'Selected locale', type: 'string'},  {change: 'ne'}, setup);
+initializeState(`${statePrefix}.locale`, defaultLocale, {name: 'Selected locale', type: 'string'}, 'ne', setup);
 initializeState(`${statePrefix}.languages`, '[]', {name: 'Localizzed languages list', type: 'string'});
 initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
 
