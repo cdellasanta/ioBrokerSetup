@@ -1,7 +1,11 @@
 // My global functions for state and listener initialization
 // see doc https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#global-functions
 // It works like PHP traits
-// In the script you need to declare them:
+// In TypeScript  you need to declare them:
+//   declare function runAfterInitialization(callback: CallableFunction): void;
+//   declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
+//   declare function getStateIfExists(stateId: string): any;
+//   declare function getStateValue(stateId: string): any;
 
 const resetStatesOnReload = true; // Enable only when actively developing
 

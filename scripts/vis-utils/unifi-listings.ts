@@ -74,7 +74,7 @@ const performances = {
 import * as moment from "moment";
 
 // Initialization create/delete states, register listeners
-// Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
+// Using my global functions (see global script common-states-handling )
 declare function runAfterInitialization(callback: CallableFunction): void;
 declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
 declare function getStateIfExists(stateId: string): any;
