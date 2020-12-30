@@ -21,6 +21,8 @@ function setViewTranslations() {
     setState(
         `${statePrefix}.translations`,
         JSON.stringify([
+            'light',
+            'dark',
             'Language',
             'Sandbox',
             'Meteo',
@@ -71,6 +73,30 @@ function setLanguages() {
 
 function translate(enText, forcedLocale = false) {
     const map = { // For translations used https://translator.iobroker.in (that uses Google translator)
+        "light": {
+            "en": "light",
+            "de": "hell",
+            "ru": "яркий",
+            "pt": "brilhante",
+            "nl": "helder",
+            "fr": "brillant",
+            "it": "chiaro",
+            "es": "brillante",
+            "pl": "jasny",
+            "zh-cn": "亮"
+        },
+        "dark": {
+            "en": "dark",
+            "de": "dunkel",
+            "ru": "тьма",
+            "pt": "Sombrio",
+            "nl": "donker",
+            "fr": "foncé",
+            "it": "scuro",
+            "es": "oscuro",
+            "pl": "ciemny",
+            "zh-cn": "黑暗"
+        },
         "Language": {
             "en": "Language",
             "de": "Sprache",
@@ -83,6 +109,7 @@ function translate(enText, forcedLocale = false) {
             "pl": "Język",
             "zh-cn": "语言"
         },
+        // menu
         "Sandbox": {
             "en": "Sandbox",
             "de": "Sandkasten",
@@ -158,7 +185,7 @@ function translate(enText, forcedLocale = false) {
         },
         "German": {
             "en": "German",
-            "de": "Deutsche",
+            "de": "Deutsch",
             "ru": "Немецкий",
             "pt": "alemão",
             "nl": "Duitse",
