@@ -68,12 +68,10 @@ const performances = {
 	}
 };
 
-
 // **********************************************************************************************************************************************************************
-// Libss, should not need to 'require' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module),
+// Modules: should not need to 'import' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module),
 // but to avoid TypeScript inspection errors, doing it anyway ...
-// @ts-ignore
-const moment = require('moment');
+import * as moment from "moment";
 
 // Initialization create/delete states, register listeners
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
