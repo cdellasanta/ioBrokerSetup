@@ -11,7 +11,7 @@ const rotateOverlayInterval = 120; /** @todo implement? */
 const countryParams = {lat: 46.818188, lon: 8.227512, zoom: 7}; // Switzerland
 
 // Well each continent has more-or-less scientific definitions for its center
-const continentParams = {lat: 50.102223, lon: 9.254419, zoom: 4}; // Old center of EU (corresponds to the headquarters to the European Central Bank)
+const continentParams = {lat: 50.102223, lon: 9.254419, zoom: 4}; // Old center of EU (corresponds to the headquarters of the European Central Bank)
 
 // Models: refer to https://community.windy.com/topic/12/what-source-of-weather-data-windy-use
 const defaultModel = 'nems';

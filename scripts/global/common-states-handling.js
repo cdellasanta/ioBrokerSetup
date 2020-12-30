@@ -7,7 +7,7 @@
 //   declare function getStateIfExists(stateId: string): any;
 //   declare function getStateValue(stateId: string): any;
 
-const resetStatesOnReload = true; // Enable only when actively developing
+const resetStatesOnReload = false; // Enable only when actively developing
 
 let statesInitializing = 0; // Semaphore for runAfterInitialization, handled by initializeState
 
