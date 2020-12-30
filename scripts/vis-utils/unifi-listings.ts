@@ -184,8 +184,8 @@ function updateDeviceLists() {
             if (unifiDevice) {
                 let cpu = getStateValue(`${idDevice}.system-stats.cpu`) || 0;
                 let mem = getStateValue(`${idDevice}.system-stats.mem`) || 0;
-                let cpuPerformance = !isConnected ? 'none' : (cpu <= 50 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
-                let memPerformance = !isConnected ? 'none' : (mem <= 50 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
+                let cpuPerformance = !isConnected ? 'none' : (cpu <= 70 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
+                let memPerformance = !isConnected ? 'none' : (mem <= 70 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
 
                 // The icons do not really fit, there is no good option for a "ram memory bank" in https://materialdesignicons.com/ 
                 additionalInfoItems += infoItem(/*'cpu-64-bit'*/ 'memory', performances[cpuPerformance].color, `${cpu}%`);
@@ -402,7 +402,7 @@ function setSortItems(): void {
             {
                 text: translate('Name'),
                 value: 'name',
-                icon: 'sort-alphabetical'
+                icon: 'sort-alphabetical-variant'
             },
             {
                 text: translate('IP address'),
