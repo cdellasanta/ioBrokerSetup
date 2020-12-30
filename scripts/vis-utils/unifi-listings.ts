@@ -71,7 +71,8 @@ const performances = {
 // **********************************************************************************************************************************************************************
 // Modules: should not need to 'import' them (ref: https://github.com/ioBroker/ioBroker.javascript/blob/c2725dcd9772627402d0e5bc74bf69b5ed6fe375/docs/en/javascript.md#require---load-some-module),
 // but to avoid TypeScript inspection errors, doing it anyway ...
-import * as moment from "moment";
+// import * as moment from "moment"; // Should work, but typescript raises exception ...
+const moment = require('moment');
 
 // Initialization create/delete states, register listeners
 // Using my global functions (see global script common-states-handling )
@@ -82,14 +83,17 @@ declare function getStateValue(stateId: string): any;
 
 const getLocale = () => getStateValue('0_userdata.0.vis.locale') || defaultLocale;
 
-
 initializeState(`${statePrefix}.jsonList`, '[]', {name: 'UniFi devices listing: jsonList', type: 'string'});
-
-// Change on sort mode triggers list generation and reset of sort-timer-reset
-initializeState(`${statePrefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'}, 'any', () => { updateDeviceLists(); resetSortTimer(); });
-
-// Change on filter mode triggers list generation and reset of filter-timer-reset
-initializeState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'}, 'any', () => { updateDeviceLists(); resetFilterTimer(); });
+initializeState(`${statePrefix}.sortMode`, defaultSortMode, {name: 'UniFi device listing: sortMode', type: 'string'}, 'any', () => {
+    // Change on sort mode triggers list generation and reset of sort-timer-reset
+    updateDeviceLists(); 
+    resetSortTimer(); 
+});
+initializeState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: filterMode', type: 'string'}, 'any', () => { 
+    // Change on filter mode triggers list generation and reset of filter-timer-reset
+    updateDeviceLists(); 
+    resetFilterTimer(); 
+});
 
 // Sorters, filters and some additional translations are saved in states to permit texts localization
 initializeState(`${statePrefix}.sortersJsonList`, '{}', {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
@@ -98,7 +102,11 @@ initializeState(`${statePrefix}.translations`, '{}', {name: 'UniFi device listin
 
 if (devicesView) {
     initializeState(`${statePrefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
-    initializeState(`${statePrefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'}, 'any', () => { setState(devicesView.currentViewState, devicesView.devicesViewKey); }); // On selected device change, go to "Devices" view
+    initializeState(`${statePrefix}.selectedUrl`, '', {name: 'Selected device link: selectedUrl', type: 'string'}, 'any', (obj) => { 
+        // On selected device change, go to "Devices" view
+        log(`Switching to devices View that should now display URL: ${obj.state.val}`, 'debug');
+        setState(devicesView.currentViewState, devicesView.devicesViewKey);
+     }); 
 }
 
 // On locale change, setup correct listings
