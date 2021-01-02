@@ -2,13 +2,14 @@ const defaultLocale = 'en';
 const statePrefix = '0_userdata.0.vis';
 const views = [
     // Order is important; icon is full path to image or a materialdesign icon
-    {view: '0_Sandbox',       label: 'Sandbox',        icon: 'test-tube'},
-    {view: '1_Shutters',      label: 'Roller shutter', icon: 'window-shutter'},
-    {view: '3_0_Weather',     label: 'Weather',        icon: 'weather-partly-cloudy'}, // or weather-sunny? Could icon change depending on current weather?
-    {view: '3_Weather',       label: 'Weather (old)',  icon: 'test-tube'}, 
-    {view: '4_Radar',         label: 'Radar',          icon: 'radar'},
-    {view: '8_Devices',       label: 'Devices',        icon: 'devices'},
-    {view: '9_UnifiNetwork',  label: 'Network',        icon: 'server-network'}
+    {view: '1_Shutters',      label: 'Roller shutters', icon: 'window-shutter'},
+    {view: '3_0_Weather',     label: 'Weather',         icon: 'weather-partly-cloudy'}, // or weather-sunny? Could icon change depending on current weather?
+    {view: '4_Radar',         label: 'Radar',           icon: 'radar'},
+    {view: '8_Devices',       label: 'Devices',         icon: 'devices'},
+    {view: '9_UnifiNetwork',  label: 'Network',         icon: 'server-network'},
+
+    {view: '0_Sandbox',       label: 'Playground',      icon: 'test-tube'},
+    {view: '3_Weather',       label: 'Weather (old)',   icon: 'test-tube'},
 ];
 
 const getLocale = () =>  getStateValue(`${statePrefix}.locale`) || defaultLocale;
@@ -29,14 +30,14 @@ initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations',
 
 runAfterInitialization(()=> {
     setup();
-    
+
     // For the 'basic - view in widget 8' can't change values on runtime (e.g. on locale change), 
     // because the currend displayed view would be blanked out, until a different view is selected
     setState(
         `${statePrefix}.widgetViews`,
         JSON.stringify(views.map(item => item.view)),
         true
-    );   
+    );
 });
 
 // Handle light/dark modes
@@ -161,27 +162,27 @@ function translate(enText: string, forcedLocale?: boolean): string {
             "zh-cn": "语言"
         },
         // menu
-        "Sandbox": {
-            "en": "Sandbox",
-            "de": "Sandkasten",
-            "ru": "Песочница",
-            "pt": "Caixa de areia",
-            "nl": "Sandbox",
-            "fr": "Bac à sable",
-            "it": "Buca della sabbia",
-            "es": "Salvadera",
-            "pl": "Piaskownica",
-            "zh-cn": "沙盒"
+        "Playground": {
+            "en": "Playground",
+            "de": "Spielplatz",
+            "ru": "Игровая площадка",
+            "pt": "Parque infantil",
+            "nl": "Speelplaats",
+            "fr": "Terrain de jeux",
+            "it": "Terreno di gioco",
+            "es": "Patio de recreo",
+            "pl": "Plac zabaw",
+            "zh-cn": "操场"
         },
-        "Roller shutter": {
-            "en": "Roller shutter",
-            "de": "Rollladen",
+        "Roller shutters": {
+            "en": "Roller shutters",
+            "de": "Rollläden",
             "ru": "Рольставни",
-            "pt": "Persiana",
-            "nl": "Rolluik",
-            "fr": "Volet roulant",
-            "it": "Tapparella",
-            "es": "Persiana",
+            "pt": "Persianas",
+            "nl": "Rolluiken",
+            "fr": "Volets roulants",
+            "it": "Tapparelle",
+            "es": "Persianas enrollables",
             "pl": "Rolety",
             "zh-cn": "卷帘百叶窗"
         },
@@ -191,11 +192,23 @@ function translate(enText: string, forcedLocale?: boolean): string {
             "ru": "Погода",
             "pt": "Clima",
             "nl": "Weer",
-            "fr": "La météo",
-            "it": "Tempo metereologico",
+            "fr": "Météo",
+            "it": "Meteo",
             "es": "Clima",
             "pl": "Pogoda",
             "zh-cn": "天气"
+        },
+        "Weather (old)": {
+            "en": "Weather (old)",
+            "de": "Wetter (alt)",
+            "ru": "Погода (старая)",
+            "pt": "Tempo (antigo)",
+            "nl": "Weer (oud)",
+            "fr": "Météo (ancienne)",
+            "it": "Meteo (vecchio)",
+            "es": "Clima (viejo)",
+            "pl": "Pogoda (stara)",
+            "zh-cn": "天气（旧）"
         },
         "Radar": {
             "en": "Radar",

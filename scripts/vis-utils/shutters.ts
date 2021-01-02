@@ -1,6 +1,6 @@
 /**
  * Shutter texts and vars
- * 
+ *
  * Requirements:
  *  - Shuttercontrol adapter
  *  - Some programming skills
@@ -35,7 +35,7 @@ if (existsState('0_userdata.0.vis.locale')) {
 runAfterInitialization(
     () => {
         setup();
-        
+
         // Reset automatic switches to true
         ['autoLivingArea', 'autoSleepingArea', 'autoChildArea'].forEach(
             id => setState(`${statePrefix}.${id}`, true, true)
