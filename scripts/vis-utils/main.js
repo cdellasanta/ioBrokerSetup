@@ -1,7 +1,7 @@
 const defaultLocale = 'en';
 const statePrefix = '0_userdata.0.vis';
 
-const getLocale = () => existsState(`${statePrefix}.locale`) ? getState(`${statePrefix}.locale`).val : defaultLocale;
+const getLocale = () =>  getStateValue(`${statePrefix}.locale`).val || defaultLocale;
 
 // Initialization create/delete states, register listeners
 // Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
@@ -11,6 +11,11 @@ initializeState(`${statePrefix}.languages`, '[]', {name: 'Localizzed languages l
 initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
 
 runAfterInitialization(setup);
+
+// Handle light/dark modes
+setState('vis-materialdesign.0.colors.darkTheme', !isAstroDay()); // On script startup
+schedule({astro: 'sunrise'}, () => setState('vis-materialdesign.0.colors.darkTheme', false));
+schedule({astro: 'sunset'}, () => setState('vis-materialdesign.0.colors.darkTheme', true));
 
 function setup() {
     setLanguages();
