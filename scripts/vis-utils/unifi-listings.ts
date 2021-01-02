@@ -117,7 +117,7 @@ runAfterInitialization(() => {
     setup();
 
     // Refresh lists every time the unifi adapter has updated its data
-    on('unifi.0.info.connection','any', updateDeviceLists);
+    on('unifi.0.info.connection', 'any', updateDeviceLists);
 });
 
 
@@ -358,7 +358,7 @@ function resetSortTimer() {
     if (sortResetAfter > 0) {
         this.clearTimeout(sortTimeoutID); // If set then clear previous timer
 
-        sortTimeoutID = this.setTimeout(() => setState(`${statePrefix}.sortMode`, defaultSortMode), sortResetAfter * 1000);
+        sortTimeoutID = setTimeout(() => setState(`${statePrefix}.sortMode`, defaultSortMode), sortResetAfter * 1000);
     }
 }
 
@@ -368,7 +368,7 @@ function resetFilterTimer() {
     if (filterResetAfter > 0) {
         this.clearTimeout(filterTimeoutID); // If set then clear previous timer
 
-        filterTimeoutID = this.setTimeout(() => setState(`${statePrefix}.filterMode`, ''), filterResetAfter * 1000);
+        filterTimeoutID = setTimeout(() => setState(`${statePrefix}.filterMode`, ''), filterResetAfter * 1000);
     }
 }
 

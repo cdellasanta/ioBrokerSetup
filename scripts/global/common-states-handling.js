@@ -21,7 +21,7 @@ function runAfterInitialization(callback) {
     }
 
     // Important: use timout instead of wait!
-    this.setTimeout(() => runAfterInitialization(callback), 100);
+    setTimeout(() => runAfterInitialization(callback), 100);
 }
 
 function initializeState(stateId, defaultValue, common, listenerChangeType = null, listenerCallback = null) {
