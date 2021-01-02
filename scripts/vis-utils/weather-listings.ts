@@ -107,38 +107,22 @@ function createWeekForecastGraph(maxDays) {
         let secondaryDayForecastState = `weatherunderground.0.forecast.${day - 1}d`;
 
         if (existsState(`${primaryDayForecastState}.formatted_date`)) {
-            data.axisLabels.push(getDayName(day, `${primaryDayForecastState}.formatted_date`));
-                
-            // temperature Max 
             let temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttx`));
-            if (temperatureMaxVal > data.temperatureAxisMax) {
-                data.temperatureAxisMax = temperatureMaxVal;
-            }
-            if (temperatureMaxVal < data.temperatureAxisMin) {
-                data.temperatureAxisMin = temperatureMaxVal;
-            }
-            data.temperatureMax.push(temperatureMaxVal);
-            data.temperatureMaxColors.push(temperatureGradientColors.getColorByValue(temperatureMaxVal));
-
-            // temperature Min 
             let temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttn`));
-            if (temperatureMinVal > data.temperatureAxisMax) {
-                data.temperatureAxisMax = temperatureMinVal;
-            }
-            if (temperatureMinVal < data.temperatureAxisMin) {
-                data.temperatureAxisMin = temperatureMinVal;
-            }
-            data.temperatureMin.push(temperatureMinVal);
-            data.temperatureMinColors.push(temperatureGradientColors.getColorByValue(temperatureMinVal));
-
             let precipitationVal = getStateValue(`${secondaryDayForecastState}.precipitationAllDay`) || 0;
 
-            if (precipitationVal > data.precipitationMaxVal) {
-                data.precipitationMaxVal = precipitationVal;
-            }
+            if (temperatureMaxVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMaxVal; }
+            if (temperatureMaxVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMaxVal; }
+            if (temperatureMinVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMinVal; }
+            if (temperatureMinVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMinVal; }
+            if (precipitationVal > data.precipitationMaxVal) { data.precipitationMaxVal = precipitationVal; }
 
+            data.axisLabels.push(getDayName(day, `${primaryDayForecastState}.formatted_date`));
+            data.temperatureMax.push(temperatureMaxVal);
+            data.temperatureMaxColors.push(temperatureGradientColors.getColorByValue(temperatureMaxVal));
+            data.temperatureMin.push(temperatureMinVal);
+            data.temperatureMinColors.push(temperatureGradientColors.getColorByValue(temperatureMinVal));
             data.precipitation.push(precipitationVal);
-
             data.precipitationChance.push(getStateValue(`${secondaryDayForecastState}.precipitationChance`) || 0);
         } else {
             console.warn(`[createWeekForecastGraph] No data for day ${day-1}!`);
