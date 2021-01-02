@@ -1,5 +1,5 @@
 /**
- * Meteo localized texts and vars
+ * Weather localized texts and vars
  * 
  * This is an adaption of Scrounger <Scrounger@gmx.net> Weather example (https://github.com/Scrounger/ioBroker.vis-materialdesign/tree/master/examples/Weather)
  * using "Swiss Weather API" (CH) adapter istead of "Das Wetter" (DE) adapter.

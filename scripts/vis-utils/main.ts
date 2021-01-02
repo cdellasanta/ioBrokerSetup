@@ -1,45 +1,79 @@
 const defaultLocale = 'en';
 const statePrefix = '0_userdata.0.vis';
+const views = [
+    // Order is important; icon is full path to image or a materialdesign icon
+    {view: '0_Sandbox',       label: 'Sandbox',        icon: 'test-tube'},
+    {view: '1_Shutters',      label: 'Roller shutter', icon: 'window-shutter'},
+    {view: '3_0_Weather',     label: 'Weather',        icon: 'weather-partly-cloudy'}, // or weather-sunny? Could icon change depending on current weather?
+    {view: '3_Weather',       label: 'Weather (old)',  icon: 'test-tube'}, 
+    {view: '4_Radar',         label: 'Radar',          icon: 'radar'},
+    {view: '8_Devices',       label: 'Devices',        icon: 'devices'},
+    {view: '9_UnifiNetwork',  label: 'Network',        icon: 'server-network'}
+];
 
-const getLocale = () =>  getStateValue(`${statePrefix}.locale`).val || defaultLocale;
+const getLocale = () =>  getStateValue(`${statePrefix}.locale`) || defaultLocale;
 
 // Initialization create/delete states, register listeners
-// Using my global functions `initializeState` and `runAfterInitialization` (see global script common-states-handling )
+// Using my global functions (see global script common-states-handling )
+declare function runAfterInitialization(callback: CallableFunction): void;
+declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
+declare function getStateIfExists(stateId: string): any;
+declare function getStateValue(stateId: string): any;
 
+initializeState(`${statePrefix}.currentView`, 0, {name: 'Current selected view', type: 'number'});
+initializeState(`${statePrefix}.menuViews`, '[]', {name: 'Views to show in main menu', type: 'string', write: false});
+initializeState(`${statePrefix}.widgetViews`, '[]', {name: 'Views to show in view widget', type: 'string', write: false});
 initializeState(`${statePrefix}.locale`, defaultLocale, {name: 'Selected locale', type: 'string'}, 'ne', setup);
 initializeState(`${statePrefix}.languages`, '[]', {name: 'Localizzed languages list', type: 'string'});
 initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
 
-runAfterInitialization(setup);
+runAfterInitialization(()=> {
+    setup();
+    
+    // For the 'basic - view in widget 8' can't change values on runtime (e.g. on locale change), 
+    // because the currend displayed view would be blanked out, until a different view is selected
+    setState(
+        `${statePrefix}.widgetViews`,
+        JSON.stringify(views.map(item => item.view)),
+        true
+    );   
+});
 
 // Handle light/dark modes
 setState('vis-materialdesign.0.colors.darkTheme', !isAstroDay()); // On script startup
 schedule({astro: 'sunrise'}, () => setState('vis-materialdesign.0.colors.darkTheme', false));
 schedule({astro: 'sunset'}, () => setState('vis-materialdesign.0.colors.darkTheme', true));
 
-function setup() {
+function setup(): void {
     setLanguages();
     setViewTranslations();
+    setMenuViews();
+
+    log('Updated main views', 'debug');
 }
 
-function setViewTranslations() {
+function setMenuViews(): void {
+    setState(
+        `${statePrefix}.menuViews`,
+        JSON.stringify(views.map(item => ({label: translate(item.label), icon: item.icon}))),
+        true
+    );
+}
+
+function setViewTranslations(): void {
     setState(
         `${statePrefix}.translations`,
         JSON.stringify([
+            'Home',
             'light',
             'dark',
-            'Language',
-            'Sandbox',
-            'Meteo',
-            'Radar',
-            'Devices',
-            'Network'
+            'Language'
         ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
         true
     );
 }
 
-function setLanguages() {
+function setLanguages(): void {
     const getText = (enText, locale) => `${translate(enText)}${getLocale() === locale ? '' : ( ' - ' + translate(enText, locale))}`;
 
     setState(
@@ -76,8 +110,20 @@ function setLanguages() {
     // ]
 }
 
-function translate(enText, forcedLocale = false) {
+function translate(enText: string, forcedLocale?: boolean): string {
     const map = { // For translations used https://translator.iobroker.in (that uses Google translator)
+        "Home": {
+            "en": "Home",
+            "de": "Zuhause",
+            "ru": "Главная",
+            "pt": "Casa",
+            "nl": "Huis",
+            "fr": "Accueil",
+            "it": "Casa",
+            "es": "Casa",
+            "pl": "Dom",
+            "zh-cn": "家"
+        },
         "light": {
             "en": "light",
             "de": "hell",
@@ -121,23 +167,35 @@ function translate(enText, forcedLocale = false) {
             "ru": "Песочница",
             "pt": "Caixa de areia",
             "nl": "Sandbox",
-            "fr": "bac à sable",
-            "it": "Sandbox",
+            "fr": "Bac à sable",
+            "it": "Buca della sabbia",
             "es": "Salvadera",
             "pl": "Piaskownica",
             "zh-cn": "沙盒"
         },
-        "Meteo": {
-            "en": "Meteo",
-            "de": "Meteo",
-            "ru": "Метео",
-            "pt": "Meteo",
-            "nl": "Meteo",
-            "fr": "Météo",
-            "it": "Meteo",
-            "es": "Meteo",
-            "pl": "Meteo",
-            "zh-cn": "流星"
+        "Roller shutter": {
+            "en": "Roller shutter",
+            "de": "Rollladen",
+            "ru": "Рольставни",
+            "pt": "Persiana",
+            "nl": "Rolluik",
+            "fr": "Volet roulant",
+            "it": "Tapparella",
+            "es": "Persiana",
+            "pl": "Rolety",
+            "zh-cn": "卷帘百叶窗"
+        },
+        "Weather": {
+            "en": "Weather",
+            "de": "Wetter",
+            "ru": "Погода",
+            "pt": "Clima",
+            "nl": "Weer",
+            "fr": "La météo",
+            "it": "Tempo metereologico",
+            "es": "Clima",
+            "pl": "Pogoda",
+            "zh-cn": "天气"
         },
         "Radar": {
             "en": "Radar",

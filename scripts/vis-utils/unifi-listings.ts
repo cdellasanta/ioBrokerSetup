@@ -35,7 +35,7 @@ const imagesPath = '/vis.0/myImages/networkDevices/'; // Path for images
 const unifiImagesUrlPrefix = 'https://controller.dsnet.me:8443/manage/angular/g7989b19/images/devices/';
     
 // Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
-const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: 3};
+const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: JSON.parse(getState('0_userdata.0.vis.widgetViews').val).indexOf('8_Devices')};
 
 const offlineTextSize = 14;
 const infoIconSize = 20;
@@ -293,10 +293,21 @@ function updateDeviceLists() {
             deviceList.forEach(obj => {
                 if (obj.listType === 'buttonLink') {
                     linkList.push({
-                        // Visualization data (tplVis-materialdesign-Select)
                         text: obj.name,
+
+                        // Visualization data (tplVis-materialdesign-Select)
                         value: obj.buttonLink,
-                        icon: obj.icon
+                        icon: obj.icon,
+
+                        // Visualization data (tplVis-materialdesign-List)
+                        image: obj.icon,
+                        showDivider: true,
+                        listType: 'buttonState',
+                        objectId: `${statePrefix}.selectedUrl`,
+                        showValueLabel: false,
+                        buttonStateValue: obj.buttonLink,
+                        //imageActiveColor: "#ffffff", // Make dependant on 'vis-materialdesign.0.colors.darkTheme' ?
+                        buttonBackgroundActiveColor: "#888888" // Make dependant on 'vis-materialdesign.0.colors.darkTheme' ?
                         /** @todo Add some properties (connected, ip, received, sent, experience, ...)? */
                     });
 
