@@ -33,8 +33,8 @@ const coordinates = {
     ...customCoordinetes
 };
 
-initializeState(`${statePrefix}.completeOriginalPages`, true, {name: 'Clip sonnenverlauf.de tools and adverts', type: 'boolean'});
-initializeState(`${statePrefix}.url`, true, {name: 'Url for sonnenverlauf.de including coordinates zoom and map type', type: 'string'});
+initializeState(`${statePrefix}.completeOriginalPages`, true, {name: 'Display or clip sonnenverlauf.de tools and adverts', type: 'boolean'});
+initializeState(`${statePrefix}.url`, 'https://sonnenverlauf.de', {name: 'Url for sonnenverlauf.de including coordinates zoom and map type', type: 'string'});
 initializeState(`${statePrefix}.viewTarget`, 'home', {name: 'Target for view (home|continent|world)', type: 'string'}, 'any', setTarget);
 initializeState(`${statePrefix}.selectedMap`, '0', {name: 'Map to show', type: 'string'}, 'ne', setTarget);
 initializeState(`${statePrefix}.mapList`, '[]', {name: 'List of available maps', type: 'string'});
