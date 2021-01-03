@@ -5,6 +5,7 @@ const views = [
     {view: '1_Shutters',      label: 'Roller shutters', icon: 'window-shutter'},
     {view: '3_0_Weather',     label: 'Weather',         icon: 'weather-partly-cloudy'}, // or weather-sunny? Could icon change depending on current weather?
     {view: '4_Radar',         label: 'Radar',           icon: 'radar'},
+    {view: '5_Sun',           label: 'Sun position',    icon: 'weather-sunny'},
     {view: '8_Devices',       label: 'Devices',         icon: 'devices'},
     {view: '9_UnifiNetwork',  label: 'Network',         icon: 'server-network'},
 
@@ -221,6 +222,18 @@ function translate(enText: string, forcedLocale?: boolean): string {
             "es": "Radar",
             "pl": "Radar",
             "zh-cn": "雷达"
+        },
+        "Sun position": {
+            "en": "Sun position",
+            "de": "Sonnenstand",
+            "ru": "Положение солнца",
+            "pt": "Posição do sol",
+            "nl": "Positie van de zon",
+            "fr": "Position du soleil",
+            "it": "Posizione del sole",
+            "es": "Posición del sol",
+            "pl": "Pozycja słońca",
+            "zh-cn": "太阳位置"
         },
         "Devices": {
             "en": "Devices",

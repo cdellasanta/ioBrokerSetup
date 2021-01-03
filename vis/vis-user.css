@@ -1,0 +1,6 @@
+.clip-sun-page-tool-and-adverts .vis-widget-body iframe {
+    margin-top: -82px !important;
+    height: calc(100% + 82px + 65px) !important;
+    margin-left: -316px !important;
+    width: calc(100% + 316px + 350px) !important;
+}
