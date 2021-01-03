@@ -52,6 +52,7 @@ const configuration = getObject('system.config');
 const latitude = configuration.common.latitude;
 // @ts-ignore
 const longitude = configuration.common.longitude;
+const radToDeg = 180 / Math.PI;
 const temperatureGradientColors = getGradientColors(-20, 40, temperatureColorByValue);
 
 initializeState(`${statePrefix}.weekForecastIconList`, '[]', {name: 'Icon list for week forecast', type: 'string'});
@@ -97,9 +98,11 @@ function createWeekForecastGraph(maxDays) {
         temperatureMinColors: [],
         temperatureAxisMax: 0,
         temperatureAxisMin: 100,
-        precipitationChance: [],
-        precipitation: [],
-        precipitationMaxVal: 0
+        precipitationChances: [],
+        precipitations: [],
+        precipitationAxisMax: 0,
+        winds: [],
+        windAxisMax: 0,
     };
 
     for (let day = 1; day <= maxDays; day++) {
@@ -110,20 +113,23 @@ function createWeekForecastGraph(maxDays) {
             let temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttx`));
             let temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttn`));
             let precipitationVal = getStateValue(`${secondaryDayForecastState}.precipitationAllDay`) || 0;
+            let windVal = getStateValue(`${secondaryDayForecastState}.windSpeed`) || 0;
 
             if (temperatureMaxVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMaxVal; }
             if (temperatureMaxVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMaxVal; }
             if (temperatureMinVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMinVal; }
             if (temperatureMinVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMinVal; }
-            if (precipitationVal > data.precipitationMaxVal) { data.precipitationMaxVal = precipitationVal; }
+            if (precipitationVal > data.precipitationAxisMax) { data.precipitationAxisMax = precipitationVal; }
+            if (windVal > data.windAxisMax) { data.windAxisMax = windVal; }
 
             data.axisLabels.push(getDayName(day, `${primaryDayForecastState}.formatted_date`));
             data.temperatureMax.push(temperatureMaxVal);
             data.temperatureMaxColors.push(temperatureGradientColors.getColorByValue(temperatureMaxVal));
             data.temperatureMin.push(temperatureMinVal);
             data.temperatureMinColors.push(temperatureGradientColors.getColorByValue(temperatureMinVal));
-            data.precipitation.push(precipitationVal);
-            data.precipitationChance.push(getStateValue(`${secondaryDayForecastState}.precipitationChance`) || 0);
+            data.precipitations.push(precipitationVal);
+            data.precipitationChances.push(getStateValue(`${secondaryDayForecastState}.precipitationChances`) || 0);
+            data.winds.push(windVal);
         } else {
             console.warn(`[createWeekForecastGraph] No data for day ${day-1}!`);
         }
@@ -133,14 +139,20 @@ function createWeekForecastGraph(maxDays) {
 }
 
 function createDayForecastGraph() {
+    const sunPosition = time => suncalc.getPosition(time, latitude, longitude);
+    const sunAltitude = time => {let a = sunPosition(time).altitude; return a > 0 ? a * radToDeg : 0};
     let data = {
-        temperature: [],
+        temperatures: [],
         temperatureColors: [],
         temperatureAxisMax: 0,
         temperatureAxisMin: 100,
-        precipitationChance: [],
-        precipitation: [],
-        precipitationMaxVal: 0
+        precipitationChances: [],
+        precipitations: [],
+        precipitationAxisMax: 0,
+        winds: [],
+        windAxisMax: 0,
+        sunAltitude: [],
+        sunAltidudeMax: 90
     };
 
     for (let hour = 1; hour <= 8; hour++) {
@@ -150,15 +162,19 @@ function createDayForecastGraph() {
             let time = (new Date(getStateValue(`${hourForecastState}.date`))).getTime();
             let temperatureVal = parseFloat(getStateValue(`${hourForecastState}.values.ttt`));
             let precipitationVal = getStateValue(`${hourForecastState}.values.rr3`);
+            let windVal = getStateValue(`${hourForecastState}.values.fff`);
         
             if (temperatureVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureVal; }
             if (temperatureVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureVal; }
-            if (precipitationVal > data.precipitationMaxVal) { data.precipitationMaxVal = precipitationVal; }
+            if (precipitationVal > data.precipitationAxisMax) { data.precipitationAxisMax = precipitationVal; }
+            if (windVal > data.windAxisMax) { data.windAxisMax = windVal; }
         
-            data.temperature.push({t: time, y: temperatureVal});
+            data.temperatures.push({t: time, y: temperatureVal});
             data.temperatureColors.push(temperatureGradientColors.getColorByValue(temperatureVal));
-            data.precipitation.push({t: time, y: precipitationVal});
-            data.precipitationChance.push({t: time, y: getStateValue(`${hourForecastState}.values.pr3`)});
+            data.precipitations.push({t: time, y: precipitationVal});
+            data.precipitationChances.push({t: time, y: getStateValue(`${hourForecastState}.values.pr3`)});
+            data.winds.push({t: time, y: windVal});
+            data.sunAltitude.push({t: time, y: sunAltitude(time)});
         } else {
             console.warn(`[createWeekForecastGraph] No data for hour ${hour-1}!`);
         }
@@ -166,10 +182,28 @@ function createDayForecastGraph() {
 
     //// Add empty datapoints to let the graph spawn from midnigt to midnight
     //[(new Date(new Date().setHours(0, 0, 0, 0))).getTime(), (new Date(new Date().setHours(24, 0, 0, 0))).getTime()].forEach(
-    //    time => ['temperature', 'precipitation', 'precipitationChance'].forEach(
+    //    time => ['temperatures', 'precipitations', 'precipitationChances'].forEach(
     //       property => data[property].push({t: time})
     //    )
     //);
+
+    let sunTimes = suncalc.getTimes(moment(new Date(), 'DD.MM.YYYY').toDate(), latitude, longitude);
+    let solarNoon = (new Date(sunTimes['solarNoon'])).getTime();
+    let sunrise = (new Date(sunTimes['sunrise'])).getTime();
+    let sunset = (new Date(sunTimes['sunset'])).getTime();
+
+    // Add datapoints netween sunrise and sunset to get a better curve
+    for(let time = sunrise; time <= sunset; time += (sunset - sunrise) / 20) {
+        data.sunAltitude.push({t: time, y: sunAltitude(time)});
+    }
+
+    // Max altitude
+    data.sunAltidudeMax = sunAltitude(solarNoon);
+    data.sunAltitude.push({t: solarNoon, y: data.sunAltidudeMax}); // Add max to data
+    data.sunAltidudeMax = Math.round(data.sunAltidudeMax / 10) * 10; // Round max to the 10th 
+
+    // Sort by times
+    data.sunAltitude.sort((a, b) => a.t > b.t ? 1 : -1);
 
     populateChartData(
         `${statePrefix}.dayForecastChartJson`,
@@ -190,7 +224,7 @@ function populateChartData(stateName: string, data, additionalConfig) {
             {
                 data: data.temperatureMax,
                 type: 'line',
-                legendText: translate('Max. temperature'),
+                legendText: translate('Max. temperature') + ' [°C]',
                 line_pointSizeHover: 5,
                 line_pointSize: 0,
                 line_Tension: 0.3,
@@ -229,9 +263,9 @@ function populateChartData(stateName: string, data, additionalConfig) {
 
     graphs.push(
         {
-            data: data.temperature || data.temperatureMin,
+            data: data.temperatures || data.temperatureMin,
             type: 'line',
-            legendText: translate(data.temperatureMax ? 'Min. temperature' : 'Temperature'),
+            legendText: translate(data.temperatureMax ? 'Min. temperature' : 'Temperature') + ' [°C]',
             line_pointSizeHover: 5,
             line_pointSize: 0,
             line_Tension: 0.3,
@@ -264,13 +298,13 @@ function populateChartData(stateName: string, data, additionalConfig) {
         }
     );
 
-    if (data.precipitationChance) {
+    if (data.precipitationChances) {
         graphs.push(
             {
-                data: data.precipitationChance,
+                data: data.precipitationChances,
                 type: 'line',
                 color: precipitationChanceColor,
-                legendText: translate ('Precipitation chance'),
+                legendText: translate ('Precipitation chance') + ' [%]',
                 line_UseFillColor: true,
                 line_pointSize: 0,
                 line_pointSizeHover: 5,
@@ -292,17 +326,17 @@ function populateChartData(stateName: string, data, additionalConfig) {
         );
     }
 
-    if (data.precipitation) {
+    if (data.precipitations) {
         graphs.push(
             {
-                data: data.precipitation,
+                data: data.precipitations,
                 type: 'bar',
                 color: precipitationColor,
-                legendText: translate('Precipitation'),
+                legendText: translate('Precipitation') + ' [mm]',
                 yAxis_min: 0,
-                yAxis_max: Math.ceil((data.precipitationMaxVal + 5) / 5) * 5,
+                yAxis_max: Math.ceil((data.precipitationAxisMax + 2) / 2) * 2,
                 yAxis_maxSteps: 10,
-                yAxis_position: 'right',
+                yAxis_position: 'left',
                 yAxis_gridLines_show: false,
                 yAxis_appendix: ' mm',
                 yAxis_gridLines_border_show: false,
@@ -311,6 +345,62 @@ function populateChartData(stateName: string, data, additionalConfig) {
                 yAxis_zeroLineColor: 'black',
                 displayOrder: 1,
                 tooltip_AppendText: ' mm',
+                datalabel_show: false,
+                ...additionalConfig
+            }
+        );
+    }
+
+    if (data.winds) {
+        graphs.push(
+            {
+                data: data.winds,
+                type: 'line',
+                color: 'violet',
+                legendText: translate ('Wind speed') + ' [Km/h]',
+                line_UseFillColor: true,
+                line_pointSize: 0,
+                line_pointSizeHover: 5,
+                yAxis_min: 0,
+                yAxis_max: Math.ceil((data.windAxisMax + 5) / 5) * 5,
+                yAxis_maxSteps: 10,
+                yAxis_position: 'right',
+                yAxis_gridLines_show: false,
+                yAxis_gridLines_border_show: true,
+                yAxis_distance: 20,
+                yAxis_zeroLineWidth: 0.1,
+                yAxis_zeroLineColor: 'black',
+                yAxis_appendix: ' Km/h',
+                displayOrder: 2,
+                tooltip_AppendText: ' Km/h',
+                datalabel_show: false,
+                ...additionalConfig
+            }
+        );
+    }
+
+    if (data.sunAltitude) {
+        graphs.push(
+            {
+                data: data.sunAltitude,
+                type: 'line',
+                color: 'yellow',
+                legendText: translate ('Sun altitude') + ' [°]',
+                line_UseFillColor: true,
+                line_pointSize: 0,
+                line_pointSizeHover: 5,
+                yAxis_min: 0,
+                yAxis_max: data.sunAltidudeMax + 15 > 90 ? 90 :  data.sunAltidudeMax + 15,
+                yAxis_maxSteps: 10,
+                yAxis_position: 'right',
+                yAxis_gridLines_show: false,
+                yAxis_gridLines_border_show: true,
+                yAxis_distance: 20,
+                yAxis_zeroLineWidth: 0.1,
+                yAxis_zeroLineColor: 'black',
+                yAxis_appendix: ' °',
+                displayOrder: 2,
+                tooltip_AppendText: ' °',
                 datalabel_show: false,
                 ...additionalConfig
             }
@@ -330,7 +420,7 @@ function createWeekForecastItemList(maxDays) {
         let title = getDayName(day, `${primaryDayForecastState}.formatted_date`);
         let forecastText = getSymbolText(getStateValue(`${primaryDayForecastState}.smbd`));
         let temperatures = `${getStateValue(`${primaryDayForecastState}.ttn`)}°C &nbsp; | &nbsp; ${getStateValue(`${primaryDayForecastState}.ttx`)}°C`;
-        let precipitationChance = (getStateValue(`${secondaryDayForecastState}.precipitationChance`) || 'N/A') + '%';
+        let precipitationChances = (getStateValue(`${secondaryDayForecastState}.precipitationChances`) || 'N/A') + '%';
         let sunTimes = suncalc.getTimes(
             moment(getStateValue(`${primaryDayForecastState}.formatted_date`), 'DD.MM.YYYY').toDate(),
             latitude,
@@ -368,7 +458,7 @@ function createWeekForecastItemList(maxDays) {
                     <div style="height: 1px; background: #44739e;"></div>
                     <div style="color: grey; font-size: 11px; font-family: RobotoCondensed-Light; white-space: break-spaces; margin-top: 5px; text-align: center;">${forecastText}</div>
                     <div style="color: #44739e; font-family: RobotoCondensed-Regular; font-size: 16px; margin-top: 5px; text-align: center;">${temperatures}</div>
-                    <div style="color: grey; font-size: 11px; font-family: RobotoCondensed-Light; white-space: break-spaces; margin-top: 5px; text-align: center;">${precipitationChance}</div>
+                    <div style="color: grey; font-size: 11px; font-family: RobotoCondensed-Light; white-space: break-spaces; margin-top: 5px; text-align: center;">${precipitationChances}</div>
                 </div>`,
             image: getStateValue(`${primaryDayForecastState}.icon-url`),
             subText: subTexts.join(''),
@@ -681,6 +771,8 @@ function translate(enText) {
         'Temperature': {de: 'Temperatur', ru: 'Температура', pt: 'Temperatura', nl: 'Temperatuur', fr: 'Température', it: 'Temperatura', es: 'Temperatura', pl: 'Temperatura', 'zh-cn': '温度'},
         'Precipitation chance': {de: 'Niederschlagschance', ru: 'Вероятность осадков', pt: 'Chance de precipitação', nl: 'Neerslag kans', fr: 'Risque de précipitation', it: 'Possibilità di precipitazioni', es: 'Probabilidad de precipitación', pl: 'Szansa na opady', 'zh-cn': '降水机会'},
         'Precipitation': {de: 'Niederschlag', ru: 'Осадки', pt: 'Precipitação', nl: 'Neerslag', fr: 'Précipitation', it: 'Precipitazione', es: 'Precipitación', pl: 'Opad atmosferyczny', 'zh-cn': '沉淀'},
+        'Wind speed': {de: 'Windgeschwindigkeit', ru: 'Скорость ветра', pt: 'Velocidade do vento', nl: 'Windsnelheid', fr: 'Vitesse du vent', it: 'Velocità del vento', es: 'Velocidad del viento', pl: 'Prędkość wiatru', 'zh-cn': '风速'},
+        'Sun altitude': {de: 'Sonnenhöhe', ru: 'Высота солнца', pt: 'Altitude do sol', nl: 'Hoogte van de zon', fr: 'Altitude du soleil', it: 'Altitudine del sole', es: 'Altitud del sol', pl: 'Wysokość słońca', 'zh-cn': '太阳高度'},
         // Days
         'today': {de: 'heute', ru: 'сегодня', pt: 'hoje', nl: 'vandaag', fr: 'aujourd\'hui', it: 'oggi', es: 'hoy', pl: 'dzisiaj', 'zh-cn': '今天'},
         'tomorrow': {de: 'morgen', ru: 'завтра', pt: 'amanhã', nl: 'morgen', fr: 'demain', it: 'domani', es: 'mañana', pl: 'jutro', 'zh-cn': '明天'},
