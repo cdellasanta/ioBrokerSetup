@@ -40,31 +40,33 @@ initializeState(`${statePrefix}.selectedMap`, '0', {name: 'Map to show', type: '
 initializeState(`${statePrefix}.mapList`, '[]', {name: 'List of available maps', type: 'string'});
 initializeState(`${statePrefix}.translations`, '{}', {name: 'Sun view: viewTranslations', type: 'string', read: true, write: false});
 
-// On locale change, setup correct listings
+// On locale change, setup correct listings and url
 if (existsState('0_userdata.0.vis.locale')) {
     runAfterInitialization(() => on('0_userdata.0.vis.locale', 'ne', setup));
 }
 
-runAfterInitialization(
-    () => {
-        setup();
-        setTarget();
-    }
-);
+runAfterInitialization(setup);
 
 function setup(): void {
     setMapListItems();
     setViewTranslations();
+    setTarget();
 }
 
 function setTarget(): void {
+    const localizedUrls = {
+        sun: {en: 'www.suncalc.org', de: 'sonnenverlauf.de'},
+        moon: {en: 'www.mooncalc.org', de: 'mondverlauf.de'}
+    };
+    const getUrl = celObj => localizedUrls[celObj][getLocale()] || localizedUrls[celObj]['en'];
+
     let coord = Object.values(coordinates[getStateValue(`${statePrefix}.viewTarget` || 'home')] || coordinates.home).join(',');
     let map = getStateValue(`${statePrefix}.selectedMap`) || 0;
 
     // URL: https://sonnenverlauf.de/#/lat,lon,zoom/date/time/objectlevel/maptype  (ref: https://www.torsten-hoffmann.de/apis/suncalcmooncalc/link_de.html)
     setState(
         `${statePrefix}.url`,
-        `https://sonnenverlauf.de/#/${coord}/null/null/${homeBuildingHeight}/${map}`,
+        `https://${getUrl('sun')}/#/${coord}/null/null/${homeBuildingHeight}/${map}`,
         true
     );
 }
