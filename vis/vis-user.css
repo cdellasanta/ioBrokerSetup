@@ -5,26 +5,14 @@
     width: calc(100% + 316px + 350px) !important;
 }
 
-/* Adverts on the right are not displayed on mobile devices,
-   using media query as defined in
-   https://gist.github.com/gokulkrishh/242e68d1ee94ad05f488#file-media-query-css */
-
-/* Low Resolution Tablets, Mobiles (Landscape) Screen = B/w 481px to 767px */
-@media (min-width: 481px) and (max-width: 767px) {
-    .clip-sun-page-tool-and-adverts .vis-widget-body iframe {
-        width: calc(100% + 316px + 50px) !important;
-    }
-}
-
-/* Most of the Smartphones Mobiles (Portrait) Screen = B/w 320px to 479px */
-@media (min-width: 320px) and (max-width: 480px) {
-    .clip-sun-page-tool-and-adverts .vis-widget-body iframe {
-        width: calc(100% + 316px + 50px) !important;
-    }
-}
-
-/* Large phone screens in Landscape mode */
-@media (max-width : 896px) and (min-height: 375px) {
+/* Adverts on the right are not displayed on all devices (e.g. mobile phone)
+   Through reverse engineering/testing I see that the advert is placed into
+   a div with ID "legendeW", that is hidden through the style attribute
+   "display: none". This additional attribute seems to be served server-side
+   (only on page reload).
+   It seems that the trigger is the device min-device-pixel-ratio and not
+   bound to the min-width/height. */
+@media only screen and (-webkit-min-device-pixel-ratio: 2) {
     .clip-sun-page-tool-and-adverts .vis-widget-body iframe {
         width: calc(100% + 316px + 50px) !important;
     }
