@@ -14,7 +14,7 @@ const defaultLocale = 'de';
 
 const customCoordinetes = {
     continent: {lat: 50.102223, lon: 9.254419, zoom: 5}, // Old center of EU (corresponds to the headquarters of the European Central Bank)
-    world: {lat: 0, lon: 0, zoom: 3}
+    world: {lat: 0, lon: 0, zoom: 2}
 };
 const homeBuildingHeight = 10; // Height in meters, to correct display the shadow line
 
