@@ -16,7 +16,7 @@
 
 // Script configuration
 const statePrefix = '0_userdata.0.vis.unifiNetworkState'; // Might be better to use an english statePrefix (e.g. '0_userdata.0.vis.unifiNetworkState'), but then remember to adapt the Views too
-const defaultLocale = 'de'; 
+const defaultLocale = 'de';
 
 const lastDays = 7;       // Show devices that have been seen in the network within the last X days
 

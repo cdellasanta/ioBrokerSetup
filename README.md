@@ -7,6 +7,29 @@ new features are probably best suited to a dedicated repository.
 
 You can use this code under license terms (condider to [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=JDL4NA8HJN8LL&item_name=Coffee+and+development+infrastructure+support.+Thank+you%21&currency_code=CHF) if you appreciate).
 
+## Current progress
+
+I've very litlle time to dedicate to this personal project, here the current acheevment
+
+![Tour](tour.gif)
+
+Current features:
+ - Dynamic menu using [Material Design Widgets for IoBroker VIS](https://github.com/Scrounger/ioBroker.vis-materialdesign) 
+ - Multilingual
+ - Auto light-dark mode
+ - Weather using [Swiss Weather API (SRG-SSR API) adapter](https://www.npmjs.com/package/iobroker.swiss-weather-api) as datasource, integrated with data from [Weatherunderground adapter](https://www.npmjs.com/package/iobroker.weatherunderground).
+ - Radar using [Windy.com](https://embed.windy.com/)
+ - Sun positioning using [Sonnenverlauf.de](https://www.sonnenverlauf.de)
+ - Network and devices view using [UniFi adapter](https://www.npmjs.com/package/iobroker.unifi) based and contributed on [UnifiNetworkState example](https://github.com/Scrounger/ioBroker.vis-materialdesign/tree/master/examples/UnifiNetworkState)  
+
+Yet to come:
+ - Roller shutters automation (using wether forcast data, free days calendar and personal google calendars)
+ - Google FamilyLink overview / control
+ - Securitycams integration
+ - Tv contol
+ 
+
+
 ## License
 MIT License
 
