@@ -5,8 +5,7 @@
  * using "Swiss Weather API" (CH) adapter istead of "Das Wetter" (DE) adapter.
  *
  * Requirements:
- *  - Swiss Weather API (SRG-SSR API) adapter >= 0.3.2 (https://www.npmjs.com/package/iobroker.swiss-weather-api)
- *  - Weatherunderground adapter >= 3.2.5 (https://www.npmjs.com/package/iobroker.weatherunderground)
+ *  - Swiss Weather API (SRG-SSR API) adapter >= 0.9.0 (https://www.npmjs.com/package/iobroker.swiss-weather-api)
  *  - Library "moment", "suncalc" and "chromaJs" in the "Additional npm modules" of the javascript.0 adapter configuration
  *  - Some programming skills
  *
@@ -18,7 +17,8 @@
 const statePrefix = '0_userdata.0.vis.weather';
 const defaultLocale = 'de';
 
-const forecastDays = 7;
+const hourlyGraphForecastHours = 24; // Up to 100 .. seriously! we have that much data on the data provider!
+const daysGraphForecastDays = 6; // Up to 7 (but currently day 7 is exact same as day 6)
 const temperatureColorByValue = [
     {value: -20, color: '#5b2c6f'},
     {value: 0, color: '#2874a6'},
@@ -47,6 +47,8 @@ declare function getStateIfExists(stateId: string): any;
 declare function getStateValue(stateId: string): any;
 
 const getLocale = () => getStateValue('0_userdata.0.vis.locale') || defaultLocale;
+const isDarkTheme = () => getStateValue('vis-materialdesign.0.colors.darkTheme') === true;
+
 const configuration = getObject('system.config');
 // @ts-ignore
 const latitude = configuration.common.latitude;
@@ -65,12 +67,16 @@ if (existsState('0_userdata.0.vis.locale')) {
     runAfterInitialization(() => on('0_userdata.0.vis.locale', 'ne', setup));
 }
 
+// On theme change, setup correct listings (change weather icon)
+if (existsState('vis-materialdesign.0.colors.darkTheme')) {
+    runAfterInitialization(() => on('vis-materialdesign.0.colors.darkTheme', 'ne', setup));
+}
+
 runAfterInitialization(() => {
     setup();
 
     // After data source run, update data
     on('swiss-weather-api.0.HourForecast.status','any', updateData);
-    on('weatherunderground.0.forecast.current.observationTime','any', updateData);
 });
 
 function setup(): void {
@@ -82,9 +88,9 @@ function setup(): void {
 }
 
 function updateData() {
-    createWeekForecastItemList(forecastDays);
-    createWeekForecastGraph(forecastDays);
-    createDayForecastGraph();
+    createWeekForecastItemList(daysGraphForecastDays);
+    createWeekForecastGraph(daysGraphForecastDays);
+    createDayForecastGraph(hourlyGraphForecastHours);
 
     log('Updated data', 'debug');
 }
@@ -106,27 +112,26 @@ function createWeekForecastGraph(maxDays) {
         windAxisMax: 0,
     };
 
-    for (let day = 1; day <= maxDays; day++) {
-        let primaryDayForecastState = `swiss-weather-api.0.WeekForecast.day${day - 1}`;
-        let secondaryDayForecastState = `weatherunderground.0.forecast.${day - 1}d`;
-        let dayDate = getStateValue(`${primaryDayForecastState}.formatted_date`);
+    for (let day = 0; day <= maxDays; day++) {
+        let primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
+        let dayDate = getStateValue(`${primaryDayForecastState}.local_date_time`);
 
         if (dayDate === null) {
-            console.warn(`[createWeekForecastGraph] No data for day ${day-1}!`);
+            console.warn(`[createWeekForecastGraph] No data for day ${day}!`);
             continue;
         }
 
-        dayDate = moment(dayDate, 'DD.MM.YYYY');
+        dayDate = moment(dayDate);
 
         if (today.isAfter(dayDate)) {
-            console.warn(`[createWeekForecastGraph] Day ${day-1} can't be used because in the past!`);
+            console.warn(`[createWeekForecastGraph] Day ${day} can't be used because in the past!`);
             continue;
         }
 
-        let temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttx`));
-        let temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.ttn`));
-        let precipitationVal = getStateValue(`${secondaryDayForecastState}.precipitationAllDay`) || 0;
-        let windVal = getStateValue(`${secondaryDayForecastState}.windSpeed`) || 0;
+        let temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.TX_C`));
+        let temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.TN_C`));
+        let precipitationVal = parseFloat(getStateValue(`${primaryDayForecastState}.RRR_MM`));
+        let windVal = parseFloat(getStateValue(`${primaryDayForecastState}.FF_KMH`));
 
         if (temperatureMaxVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMaxVal; }
         if (temperatureMaxVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMaxVal; }
@@ -141,14 +146,14 @@ function createWeekForecastGraph(maxDays) {
         data.temperatureMin.push(temperatureMinVal);
         data.temperatureMinColors.push(temperatureGradientColors.getColorByValue(temperatureMinVal));
         data.precipitations.push(precipitationVal);
-        data.precipitationChances.push(getStateValue(`${secondaryDayForecastState}.precipitationChances`) || 0);
+        data.precipitationChances.push(parseFloat(getStateValue(`${primaryDayForecastState}.PROBPCP_PERCENT`)));
         data.winds.push(windVal);
     }
 
     populateChartData(`${statePrefix}.weekForecastChartJson`, data, {});
 }
 
-function createDayForecastGraph() {
+function createDayForecastGraph(maxHours) {
     const sunPosition = time => suncalc.getPosition(time, latitude, longitude);
     const sunAltitude = time => {let a = sunPosition(time).altitude; return a > 0 ? a * radToDeg : 0};
     let data = {
@@ -165,59 +170,52 @@ function createDayForecastGraph() {
         sunAltidudeMax: 90,
         currentTime: []
     };
-    let dayDate = getStateValue(`swiss-weather-api.0.24hForecast.formatted_date`);
+    let dayDate = getStateValue(`swiss-weather-api.0.forecast.60minutes.day0.00:00:00.local_date_time`);
 
     if (dayDate === null 
-        || !moment().startOf('day').isSame(moment(dayDate, 'DD.MM.YYYY'))
+        || !moment().startOf('day').isSame(moment(dayDate))
     ) {
         console.warn(`[createDayForecastGraph] No data or outdated data!`);
     } else {
-        for (let hour = 1; hour <= 8; hour++) {
-            let hourForecastState = `swiss-weather-api.0.24hForecast.hour${hour -1}`;
+        for (let hour = 0; hour <= maxHours; hour++) {
+            let hourForecastState = `swiss-weather-api.0.forecast.60minutes.day${Math.floor(hour / 24)}.${('0' + (hour % 24)).slice(-2)}:00:00`;
 
-            if (existsState(`${hourForecastState}.date`)) {
-                let time = (new Date(getStateValue(`${hourForecastState}.date`))).getTime();
-                let temperatureVal = parseFloat(getStateValue(`${hourForecastState}.values.ttt`));
-                let precipitationVal = getStateValue(`${hourForecastState}.values.rr3`);
-                let windVal = getStateValue(`${hourForecastState}.values.fff`);
-            
-                if (temperatureVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureVal; }
-                if (temperatureVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureVal; }
-                if (precipitationVal > data.precipitationAxisMax) { data.precipitationAxisMax = precipitationVal; }
-                if (windVal > data.windAxisMax) { data.windAxisMax = windVal; }
-            
-                data.temperatures.push({t: time, y: temperatureVal});
-                data.temperatureColors.push(temperatureGradientColors.getColorByValue(temperatureVal));
-                data.precipitations.push({t: time, y: precipitationVal});
-                data.precipitationChances.push({t: time, y: getStateValue(`${hourForecastState}.values.pr3`)});
-                data.winds.push({t: time, y: windVal});
-                data.sunAltitude.push({t: time, y: sunAltitude(time)});
-            } else {
-                console.warn(`[createWeekForecastGraph] No data for hour ${hour-1}!`);
-            }
+            let time = (new Date(getStateValue(`${hourForecastState}.local_date_time`))).getTime();
+            let temperatureVal = parseFloat(getStateValue(`${hourForecastState}.TTT_C`));
+            let precipitationVal = getStateValue(`${hourForecastState}.RRR_MM`);
+            let windVal = getStateValue(`${hourForecastState}.FF_KMH`);
+        
+            if (temperatureVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureVal; }
+            if (temperatureVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureVal; }
+            if (precipitationVal > data.precipitationAxisMax) { data.precipitationAxisMax = precipitationVal; }
+            if (windVal > data.windAxisMax) { data.windAxisMax = windVal; }
+        
+            data.temperatures.push({t: time, y: temperatureVal});
+            data.temperatureColors.push(temperatureGradientColors.getColorByValue(temperatureVal));
+            data.precipitations.push({t: time, y: precipitationVal});
+            data.precipitationChances.push({t: time, y: getStateValue(`${hourForecastState}.PROBPCP_PERCENT`)});
+            data.winds.push({t: time, y: windVal});
+            data.sunAltitude.push({t: time, y: sunAltitude(time)});
         }
-
-        //// Add empty datapoints to let the graph spawn from midnigt to midnight
-        //[(new Date(new Date().setHours(0, 0, 0, 0))).getTime(), (new Date(new Date().setHours(24, 0, 0, 0))).getTime()].forEach(
-        //    time => ['temperatures', 'precipitations', 'precipitationChances'].forEach(
-        //       property => data[property].push({t: time})
-        //    )
-        //);
     }
 
+    // Add some exact points for sun position (currently done only for the current day)
     let currentTime = new Date();
-    let sunTimes = suncalc.getTimes(moment(currentTime, 'DD.MM.YYYY').toDate(), latitude, longitude);
+    let sunTimes = suncalc.getTimes(currentTime, latitude, longitude);
     let solarNoon = (new Date(sunTimes['solarNoon'])).getTime();
     let sunrise = (new Date(sunTimes['sunrise'])).getTime();
     let sunset = (new Date(sunTimes['sunset'])).getTime();
-
-    // Add datapoints netween sunrise and sunset to get a better curve
-    for(let time = sunrise; time <= sunset; time += (sunset - sunrise) / 20) {
-        data.sunAltitude.push({t: time, y: sunAltitude(time)});
-    }
+ 
+    // No more needed because we have now 24 points
+    //// Add datapoints between sunrise and sunset to get a better curve
+    //for(let time = sunrise; time <= sunset; time += (sunset - sunrise) / 20) {
+    //    data.sunAltitude.push({t: time, y: sunAltitude(time)});
+    //}
 
     // Max altitude
     data.sunAltidudeMax = sunAltitude(solarNoon);
+    data.sunAltitude.push({t: sunrise, y: 0}); // Add exact time for null point on sunrise
+    data.sunAltitude.push({t: sunset, y: 0}); // Add exact time for null point on sunset
     data.sunAltitude.push({t: solarNoon, y: data.sunAltidudeMax}); // Add max to data
     data.sunAltidudeMax = Math.round(data.sunAltidudeMax / 10) * 10; // Round max to the 10th 
 
@@ -225,7 +223,7 @@ function createDayForecastGraph() {
     data.sunAltitude.sort((a, b) => a.t > b.t ? 1 : -1);
 
     // Add current time
-    data.currentTime.push({t: currentTime.getTime(), y: 1});
+    data.currentTime.push({t: (new Date()).getTime(), y: 1});
 
     populateChartData(
         `${statePrefix}.dayForecastChartJson`,
@@ -450,29 +448,28 @@ function createWeekForecastItemList(maxDays) {
     let today = moment().startOf('day');
     let iconList = [];
 
-    for (let day = 1; day <= maxDays; day++) {
-        let primaryDayForecastState = `swiss-weather-api.0.WeekForecast.day${day - 1}`;
-        let secondaryDayForecastState = `weatherunderground.0.forecast.${day - 1}d`;
-        let dayDate = getStateValue(`${primaryDayForecastState}.formatted_date`);
+    for (let day = 0; day <= maxDays; day++) {
+        let primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
+        let dayDate = getStateValue(`${primaryDayForecastState}.local_date_time`);
 
         if (dayDate === null) {
-            console.warn(`[createWeekForecastItemList] No data for day ${day-1}!`);
+            console.warn(`[createWeekForecastItemList] No data for day ${day}!`);
             continue;
         }
 
-        dayDate = moment(dayDate, 'DD.MM.YYYY');
+        dayDate = moment(dayDate);
 
         if (today.isAfter(dayDate)) {
-            console.warn(`[createWeekForecastItemList] Day ${day-1} can't be used because in the past!`);
+            console.warn(`[createWeekForecastItemList] Day ${day} can't be used because in the past!`);
             continue;
         }
 
         let title = getDayName(dayDate, today);
-        let forecastText = getSymbolText(getStateValue(`${primaryDayForecastState}.smbd`));
-        let temperatures = `${getStateValue(`${primaryDayForecastState}.ttn`)}°C &nbsp; | &nbsp; ${getStateValue(`${primaryDayForecastState}.ttx`)}°C`;
-        let precipitationChances = (getStateValue(`${secondaryDayForecastState}.precipitationChances`) || 'N/A') + '%';
+        let forecastText = getSymbolText(getStateValue(`${primaryDayForecastState}.SYMBOL_CODE`));
+        let temperatures = `${getStateValue(`${primaryDayForecastState}.TN_C`)}°C &nbsp; | &nbsp; ${getStateValue(`${primaryDayForecastState}.TX_C`)}°C`;
+        let precipitationChances = `${getStateValue(`${primaryDayForecastState}.PROBPCP_PERCENT`)} %`;
         let sunTimes = suncalc.getTimes(
-            moment(getStateValue(`${primaryDayForecastState}.formatted_date`), 'DD.MM.YYYY').toDate(),
+            moment(getStateValue(`${primaryDayForecastState}.local_date_time`)).toDate(),
             latitude,
             longitude
         ); // Properties: solarNoon, nadir, sunrise, sunset, sunriseEnd, sunsetStart, dawn, dusk,  nauticalDawn, nauticalDusk, nightEnd, night, goldenHourEnd, goldenHour
@@ -485,14 +482,16 @@ function createWeekForecastItemList(maxDays) {
             </div>`);
 
         [
-            {id: 'humidity', label: 'Air humidity', postfix: '%'},
-            {id: 'precipitationAllDay', label: 'Rain', postfix: 'mm'},
-            {id: 'windSpeed', label: 'Wind', postfix: 'km/h'},
-            {id: 'mslp', label: 'Pressure', postfix: 'hPa'},
+            //{id: 'humidity', label: 'Air humidity', postfix: '%'},
+            {id: 'RRR_MM', label: 'Rain', postfix: 'mm'},
+            {id: 'FF_KM', label: 'Wind', postfix: 'km/h'},
+            {id: 'FX_KM', label: 'Wind peak', postfix: 'km/h'},
+            //{id: 'mslp', label: 'Pressure', postfix: 'hPa'},
             //{id: 'xxx', label: 'Snow limit', postfix: 'm'},
-            {id: 'snowAllDay', label: 'Snowfall', postfix: 'cm'}
+            //{id: 'snowAllDay', label: 'Snowfall', postfix: 'cm'},
+            {id: 'SUN_H', label: 'Sun hours', postfix: 'h'},
         ].forEach(item => {
-            let value = getStateValue(`${secondaryDayForecastState}.${item.id}`);
+            let value = getStateValue(`${primaryDayForecastState}.${item.id}`);
 
             if (value !== null) {
                 addSub(item.label, value + ' ' + item.postfix);
@@ -510,7 +509,7 @@ function createWeekForecastItemList(maxDays) {
                     <div style="color: #44739e; font-family: RobotoCondensed-Regular; font-size: 16px; margin-top: 5px; text-align: center;">${temperatures}</div>
                     <div style="color: grey; font-size: 11px; font-family: RobotoCondensed-Light; white-space: break-spaces; margin-top: 5px; text-align: center;">${precipitationChances}</div>
                 </div>`,
-            image: getStateValue(`${primaryDayForecastState}.icon-url`),
+            image: getStateValue(`${primaryDayForecastState}.${isDarkTheme() ? 'ICON_URL_COLOR' : 'ICON_URL_DARK'}`) , // ICON_URL_COLOR | ICON_URL_DARK | ICON_URL_LIGHT
             subText: subTexts.join(''),
             listType: 'text',
             showValueLabel: false
@@ -833,6 +832,7 @@ function translate(enText) {
         'Wind': {de: 'Wind', ru: 'ветер', pt: 'Vento', nl: 'Wind', fr: 'Vent', it: 'Vento', es: 'Viento', pl: 'Wiatr', 'zh-cn': '风'},
         'Pressure': {de: 'Druck', ru: 'Давление', pt: 'Pressão', nl: 'Druk', fr: 'Pression', it: 'Pressione', es: 'Presión', pl: 'Ciśnienie', 'zh-cn': '压力'},
         'Snowfall': {de: 'Schneefall', ru: 'Снегопад', pt: 'Queda de neve', nl: 'Sneeuwval', fr: 'Chute de neige', it: 'Nevicata', es: 'Nevada', pl: 'Opad śniegu', 'zh-cn': '降雪'},
+        'Sun hours': {de: 'Sonnenstunden', ru: 'Солнечные часы', pt: 'Horas do sol', nl: 'Zon uren', fr: 'Heures de soleil', it: 'Ore di sole', es: 'Horas de sol', pl: 'Godziny słoneczne', 'zh-cn': '日照时间'},
         'Sunrise': {de: 'Sonnenaufgang', ru: 'Восход солнца', pt: 'Nascer do sol', nl: 'zonsopkomst', fr: 'lever du soleil', it: 'Alba', es: 'amanecer', pl: 'wschód słońca', 'zh-cn': '日出'},
         'Sunset': {de: 'Sonnenuntergang', ru: 'Закат солнца', pt: 'Sunset', nl: 'Zonsondergang', fr: 'Le coucher du soleil', it: 'Tramonto', es: 'Puesta de sol', pl: 'Zachód słońca', 'zh-cn': '日落'},
         // Symbol forecast
