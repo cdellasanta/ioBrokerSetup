@@ -17,7 +17,7 @@
 const statePrefix = '0_userdata.0.vis.weather';
 const defaultLocale = 'de';
 
-const hourlyGraphForecastHours = 24; // Up to 100 .. seriously! we have that much data on the data provider!
+const hourlyGraphForecastHours = 72; // Up to 100 .. seriously! we have that much data on the data provider!
 const daysGraphForecastDays = 6; // Up to 7 (but currently day 7 is exact same as day 6)
 const temperatureColorByValue = [
     {value: -20, color: '#5b2c6f'},
@@ -77,6 +77,9 @@ runAfterInitialization(() => {
 
     // After data source run, update data
     on('swiss-weather-api.0.HourForecast.status','any', updateData);
+
+    // Every ten minutes, to move the current time pointer
+    schedule("*/10 * * * *", updateData);
 });
 
 function setup(): void {
@@ -156,6 +159,9 @@ function createWeekForecastGraph(maxDays) {
 function createDayForecastGraph(maxHours) {
     const sunPosition = time => suncalc.getPosition(time, latitude, longitude);
     const sunAltitude = time => {let a = sunPosition(time).altitude; return a > 0 ? a * radToDeg : 0};
+    const dayDate = getStateValue(`swiss-weather-api.0.forecast.60minutes.day0.00:00:00.local_date_time`);
+    const maxTime = moment(dayDate).add(maxHours, 'hours').toDate().getTime();
+
     let data = {
         temperatures: [],
         temperatureColors: [],
@@ -170,7 +176,6 @@ function createDayForecastGraph(maxHours) {
         sunAltidudeMax: 90,
         currentTime: []
     };
-    let dayDate = getStateValue(`swiss-weather-api.0.forecast.60minutes.day0.00:00:00.local_date_time`);
 
     if (dayDate === null 
         || !moment().startOf('day').isSame(moment(dayDate))
@@ -179,48 +184,56 @@ function createDayForecastGraph(maxHours) {
     } else {
         for (let hour = 0; hour <= maxHours; hour++) {
             let hourForecastState = `swiss-weather-api.0.forecast.60minutes.day${Math.floor(hour / 24)}.${('0' + (hour % 24)).slice(-2)}:00:00`;
-
             let time = (new Date(getStateValue(`${hourForecastState}.local_date_time`))).getTime();
             let temperatureVal = parseFloat(getStateValue(`${hourForecastState}.TTT_C`));
             let precipitationVal = getStateValue(`${hourForecastState}.RRR_MM`);
+            let precipitationCancheVal = getStateValue(`${hourForecastState}.PROBPCP_PERCENT`);
             let windVal = getStateValue(`${hourForecastState}.FF_KMH`);
+            let sunAltitudeVal = sunAltitude(time);
         
             if (temperatureVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureVal; }
             if (temperatureVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureVal; }
             if (precipitationVal > data.precipitationAxisMax) { data.precipitationAxisMax = precipitationVal; }
             if (windVal > data.windAxisMax) { data.windAxisMax = windVal; }
+            if (sunAltitudeVal > data.sunAltidudeMax) { data.sunAltidudeMax = sunAltitudeVal; }
         
             data.temperatures.push({t: time, y: temperatureVal});
             data.temperatureColors.push(temperatureGradientColors.getColorByValue(temperatureVal));
             data.precipitations.push({t: time, y: precipitationVal});
-            data.precipitationChances.push({t: time, y: getStateValue(`${hourForecastState}.PROBPCP_PERCENT`)});
+            data.precipitationChances.push({t: time, y: precipitationCancheVal});
             data.winds.push({t: time, y: windVal});
-            data.sunAltitude.push({t: time, y: sunAltitude(time)});
+            data.sunAltitude.push({t: time, y: sunAltitudeVal});
         }
     }
 
-    // Add some exact points for sun position (currently done only for the current day)
-    let currentTime = new Date();
-    let sunTimes = suncalc.getTimes(currentTime, latitude, longitude);
-    let solarNoon = (new Date(sunTimes['solarNoon'])).getTime();
-    let sunrise = (new Date(sunTimes['sunrise'])).getTime();
-    let sunset = (new Date(sunTimes['sunset'])).getTime();
- 
-    // No more needed because we have now 24 points
-    //// Add datapoints between sunrise and sunset to get a better curve
-    //for(let time = sunrise; time <= sunset; time += (sunset - sunrise) / 20) {
-    //    data.sunAltitude.push({t: time, y: sunAltitude(time)});
-    //}
+    // Add exact timstamps and values for solarNoon, sunrise and sunset
+    for (let dayIncrement = 0; dayIncrement <= Math.floor(maxHours / 24); dayIncrement++) {
+        let sunTimes = suncalc.getTimes(moment(dayDate).add(dayIncrement, 'days').add(2, 'hours').toDate(), latitude, longitude);
+        let raiseTime = (new Date(sunTimes['sunrise'])).getTime();
+        let setTime = (new Date(sunTimes['sunset'])).getTime();
+        let noonTime = (new Date(sunTimes['solarNoon'])).getTime();
+        let noonAltitudeVal = sunAltitude(noonTime);
 
-    // Max altitude
-    data.sunAltidudeMax = sunAltitude(solarNoon);
-    data.sunAltitude.push({t: sunrise, y: 0}); // Add exact time for null point on sunrise
-    data.sunAltitude.push({t: sunset, y: 0}); // Add exact time for null point on sunset
-    data.sunAltitude.push({t: solarNoon, y: data.sunAltidudeMax}); // Add max to data
-    data.sunAltidudeMax = Math.round(data.sunAltidudeMax / 10) * 10; // Round max to the 10th 
+        if (raiseTime < maxTime) {
+            data.sunAltitude.push({t: raiseTime, y: 0});
+        }
 
-    // Sort by times
+        if (noonTime < maxTime) {
+            if (noonAltitudeVal > data.sunAltidudeMax) { data.sunAltidudeMax = noonAltitudeVal; }
+
+            data.sunAltitude.push({t: noonTime, y: noonAltitudeVal});
+        }
+
+        if (setTime < maxTime) {
+            data.sunAltitude.push({t: setTime, y: 0});
+        }
+    }
+
+    // Sort data by times
     data.sunAltitude.sort((a, b) => a.t > b.t ? 1 : -1);
+
+    // Round max to the 10th to get a better y axis
+    data.sunAltidudeMax = Math.round(data.sunAltidudeMax / 10) * 10;
 
     // Add current time
     data.currentTime.push({t: (new Date()).getTime(), y: 1});
@@ -803,8 +816,8 @@ function setViewTranslations(): void {
     setState(
         `${statePrefix}.translations`,
         JSON.stringify([
-            'Today forecast (24 h)',
-            'Next days forecast'
+            'Hourly forecast',
+            'Daily forecast'
         ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
         true
     );
@@ -813,8 +826,8 @@ function setViewTranslations(): void {
 function translate(enText) {
     const map = { // Used https://translator.iobroker.in for translations that uses google translator
         // View translations
-        'Today forecast (24 h)': {de: 'Heute Vorhersage (24 h)', ru: 'Прогноз на сегодня (24 ч)', pt: 'Previsão para hoje (24 h)', nl: 'Vandaag voorspelling (24 uur)', fr: 'Prévisions du jour (24 h)', it: 'Previsione odierna (24 h)', es: 'Previsión para hoy (24 h)', pl: 'Prognoza na dziś (24 h)', 'zh-cn': '今天预报（24小时）'},
-        'Next days forecast': {de: 'Prognose für die nächsten Tage', ru: 'Прогноз на следующие дни', pt: 'Previsão dos próximos dias', nl: 'Voorspelling voor de volgende dagen', fr: 'Prévisions des prochains jours', it: 'Previsioni per i prossimi giorni', es: 'Pronóstico para los próximos días', pl: 'Prognoza na następne dni', 'zh-cn': '未来几天的预测'},
+        'Hourly forecast': {de: 'Stündliche Vorhersage', ru: 'Почасовой прогноз', pt: 'Previsão horária', nl: 'Uurlijkse voorspeling', fr: 'Prévision horaire', it: 'Previsione oraria', es: 'Pronóstico por hora', pl: 'Prognoza godzinowa', 'zh-cn': '每小时预报'},
+        'Daily forecast': {de: 'Tägliche Vorhersage', ru: 'Ежедневный прогноз', pt: 'Previsão diária', nl: 'Dagelijkse voorspelling', fr: 'Prévisions quotidiennes', it: 'Previsione giornaliera', es: 'Pronóstico diario', pl: 'Prognoza dzienna', 'zh-cn': '每日预报'},
         // Graph labels
         'Max. temperature': {de: 'Max. Temperatur', ru: 'Максимум. температура', pt: 'Máx. temperatura', nl: 'Max. Hoogte temperatuur-', fr: 'Max. Température', it: 'Max. temperatura', es: 'Max. temperatura', pl: 'Maks. temperatura', 'zh-cn': '最高温度'},
         'Min. temperature': {de: 'Mindest. Temperatur', ru: 'Мин. температура', pt: 'Min. temperatura', nl: 'Min. temperatuur-', fr: 'Min. Température', it: 'Min. temperatura', es: 'Min. temperatura', pl: 'Min. temperatura', 'zh-cn': '最小温度'},
