@@ -97,7 +97,7 @@ function setOverlays() {
         value: value,
         icon: icon
     });
-    let includeSubs = getState(`${statePrefix}.includeSubOverlays`).val || false;
+    const includeSubs = getState(`${statePrefix}.includeSubOverlays`).val || false;
 
     setState(
         `${statePrefix}.overlays`, 
@@ -153,13 +153,13 @@ function setOverlays() {
 }
 
 function updateRadarUrls(radarOverlay = null) {
-    let pressureLines = getState(`${statePrefix}.displayPressureLines`).val || false;
-    let model = getState(`${statePrefix}.selectedModel`).val || 'ecmwf';
+    const pressureLines = getState(`${statePrefix}.displayPressureLines`).val || false;
+    const model = getState(`${statePrefix}.selectedModel`).val || 'ecmwf';
 
     radarOverlay = radarOverlay || getState(`${statePrefix}.selectedOverlay`).val || 'rain';
 
     const getUrl = params => {
-        let partDefaults = {
+        const partDefaults = {
             // Localization is not supported wia query params (https://community.windy.com/topic/3493/url-for-widget-forecast-with-language?_=1602973997770)
             // usedLang: 'it', lang: 'it', usedlang: 'it', lan: 'it', language: 'it', defaultLang: 'it', prefLang: 'it', seoLang: 'it', userLang: 'it',
             // Should pass the 'Accept-language' header to the iframe source
@@ -189,7 +189,7 @@ function updateRadarUrls(radarOverlay = null) {
         };
         let parts = [];
         
-        for (let i in partDefaults) {
+        for (const i in partDefaults) {
             parts.push(encodeURIComponent(i) + '=' + encodeURIComponent((params.hasOwnProperty(i) ? params : partDefaults)[i]));
         }
 

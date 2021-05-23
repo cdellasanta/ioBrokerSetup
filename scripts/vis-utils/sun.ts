@@ -60,8 +60,8 @@ function setTarget(): void {
     };
     const getUrl = celObj => localizedUrls[celObj][getLocale()] || localizedUrls[celObj]['en'];
 
-    let coord = Object.values(coordinates[getStateValue(`${statePrefix}.viewTarget` || 'home')] || coordinates.home).join(',');
-    let map = getStateValue(`${statePrefix}.selectedMap`) || 0;
+    const coord = Object.values(coordinates[getStateValue(`${statePrefix}.viewTarget` || 'home')] || coordinates.home).join(',');
+    const map = getStateValue(`${statePrefix}.selectedMap`) || 0;
 
     // URL: https://sonnenverlauf.de/#/lat,lon,zoom/date/time/objectlevel/maptype  (ref: https://www.torsten-hoffmann.de/apis/suncalcmooncalc/link_de.html)
     setState(

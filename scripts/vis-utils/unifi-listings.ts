@@ -145,21 +145,21 @@ function updateDeviceLists() {
 
     try {
         // Selector help: https://github.com/ioBroker/ioBroker.javascript/blob/master/docs/en/javascript.md#---selector
-        let devices = $('state[id=unifi\.0\.default\.*\.*\.mac]'); // Query every time function is called (for new devices)
+        const devices = $('state[id=unifi\.0\.default\.*\.*\.mac]'); // Query every time function is called (for new devices)
         let deviceList = [];
       
         for (var i = 0; i <= devices.length - 1; i++) {
-            let [,,, deviceType, mac] = devices[i].split('.');
+            const [,,, deviceType, mac] = devices[i].split('.');
 
             // Only 'clients' and 'devices' are allowed (not 'alerts' ... can't exclude direclty on selector ...)
             if (!['clients', 'devices'].includes(deviceType)) {
                 continue;
             }
 
-            let idDevice = devices[i].replace('.mac', '');
-            let unifiDevice = deviceType === 'devices';
-            let isWired = getStateValue(`${idDevice}.is_wired`) || unifiDevice;
-            let lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
+            const idDevice = devices[i].replace('.mac', '');
+            const unifiDevice = deviceType === 'devices';
+            const isWired = getStateValue(`${idDevice}.is_wired`) || unifiDevice;
+            const lastSeen = new Date(getStateValue(`${idDevice}.last_seen`));
 
             // For clients, if lastSeen difference is bigger than lastDays, then skip the device
             if (!unifiDevice && (new Date().getTime() - lastSeen.getTime()) > lastDays * 86400 * 1000) {
@@ -167,33 +167,34 @@ function updateDeviceLists() {
             }
 
             // Values for all device types and connection
-            let isConnected = getStateValue(`${idDevice}.is_online`) || unifiDevice;
-            let ip = getStateValue(`${idDevice}.ip`) || '';
-            let name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
-            let isGuest = getStateValue(`${idDevice}.is_guest`);
-            let note = getNote(idDevice, name, mac, ip);
-            let received = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}tx_bytes`) || 0;
-            let sent = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}rx_bytes`) || 0;
-            let uptime = getStateValue(`${idDevice}.uptime`);
-            let experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
+            const isConnected = getStateValue(`${idDevice}.is_online`) || unifiDevice;
+            const ip = getStateValue(`${idDevice}.ip`) || '';
+            const name = getStateValue(`${idDevice}.name`) || getStateValue(`${idDevice}.hostname`) || ip || mac;
+            const isGuest = getStateValue(`${idDevice}.is_guest`);
+            const note = getNote(idDevice, name, mac, ip);
+            const received = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}tx_bytes`) || 0;
+            const sent = getStateValue(`${idDevice}.${unifiDevice || !isWired ? '' : 'wired-'}rx_bytes`) || 0;
+            const experience = getStateValue(`${idDevice}.satisfaction`) || (isConnected ? 100 : 0); // For LAN devices I got null as expirience .. file a bug?
 
+            let uptime = getStateValue(`${idDevice}.uptime`);
             let additionalInfoItems = '';
+            
             const infoItem = (icon, color, text) => `<span style="margin: 0 2px">
                 <span class="mdi mdi-${icon}" style="color: ${color}; font-size: ${infoIconSize}px; "></span>
                 <span style="color: grey; font-family: RobotoCondensed-LightItalic; font-size: ${infoTextSize}px; margin-left: 2px;">${text}</span>
                 </span>`;
 
             if (unifiDevice) {
-                let cpu = getStateValue(`${idDevice}.system-stats.cpu`) || 0;
-                let mem = getStateValue(`${idDevice}.system-stats.mem`) || 0;
-                let cpuPerformance = !isConnected ? 'none' : (cpu <= 70 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
-                let memPerformance = !isConnected ? 'none' : (mem <= 70 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
+                const cpu = getStateValue(`${idDevice}.system-stats.cpu`) || 0;
+                const mem = getStateValue(`${idDevice}.system-stats.mem`) || 0;
+                const cpuPerformance = !isConnected ? 'none' : (cpu <= 70 ? 'good' : (cpu <= 90 ? 'low' : 'bad'));
+                const memPerformance = !isConnected ? 'none' : (mem <= 70 ? 'good' : (mem <= 90 ? 'low' : 'bad'));
 
                 // The icons do not really fit, there is no good option for a "ram memory bank" in https://materialdesignicons.com/ 
                 additionalInfoItems += infoItem(/*'cpu-64-bit'*/ 'memory', performances[cpuPerformance].color, `${cpu}%`);
                 additionalInfoItems += infoItem(/*'memory' 'expansion-card-variant'*/ 'sd', performances[memPerformance].color, `${mem}%`);
             } else {
-                let experiencePerformance = !isConnected ? 'none' : (experience >= 70 ? 'good' : (experience >= 40 ? 'low' : 'bad'));
+                const experiencePerformance = !isConnected ? 'none' : (experience >= 70 ? 'good' : (experience >= 40 ? 'low' : 'bad'));
                 let speedText = '';
                 let speedPerformance = 'none';
 
@@ -216,8 +217,8 @@ function updateDeviceLists() {
                         continue; // Skip device
                     }
                 } else {
-                    let channel = getStateValue(`${idDevice}.channel`);
-                    let signal = getStateValue(`${idDevice}.signal`);
+                    const channel = getStateValue(`${idDevice}.channel`);
+                    const signal = getStateValue(`${idDevice}.signal`);
 
                     speedText = channel === null ? '' : (channel > 13 ? '5G' : '2G');
                     speedPerformance = !isConnected ? 'none' : (signal >= -55 ? 'good' : (signal >= -70 ? 'low' : 'bad'));
@@ -267,7 +268,7 @@ function updateDeviceLists() {
         }
 
         // Sorting
-        let sortMode = getStateValue(`${statePrefix}.sortMode`);
+        const sortMode = getStateValue(`${statePrefix}.sortMode`);
 
         deviceList.sort((a, b) => {
             switch (sortMode) {
@@ -322,7 +323,7 @@ function updateDeviceLists() {
                 }
             });
 
-            let linkListString = JSON.stringify(linkList);
+            const linkListString = JSON.stringify(linkList);
 
             if (getStateValue(`${statePrefix}.linksJsonList`) !== linkListString) {
                 setState(`${statePrefix}.linksJsonList`, linkListString, true);
@@ -330,7 +331,7 @@ function updateDeviceLists() {
         }
 
         // Filtering
-        let filterMode = getStateValue(`${statePrefix}.filterMode`) || '';
+        const filterMode = getStateValue(`${statePrefix}.filterMode`) || '';
 
         if (filterMode && filterMode !== '') {
             deviceList = deviceList.filter(item => {
@@ -351,7 +352,7 @@ function updateDeviceLists() {
             });
         }
 
-        let result = JSON.stringify(deviceList);
+        const result = JSON.stringify(deviceList);
 
         if (getStateValue(`${statePrefix}.jsonList`) !== result) {
             setState(`${statePrefix}.jsonList`, result, true);
@@ -385,7 +386,7 @@ function resetFilterTimer() {
 }
 
 function setTimeLocale(): void {
-    let locale = getLocale();
+    const locale = getLocale();
 
     moment.locale(locale);
     moment.updateLocale(locale, {

@@ -99,7 +99,7 @@ function updateData() {
 }
 
 function createWeekForecastGraph(maxDays) {
-    let today = moment().startOf('day');
+    const today = moment().startOf('day');
     let data = {
         axisLabels: [],
         temperatureMax: [],
@@ -116,7 +116,7 @@ function createWeekForecastGraph(maxDays) {
     };
 
     for (let day = 0; day <= maxDays; day++) {
-        let primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
+        const primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
         let dayDate = getStateValue(`${primaryDayForecastState}.local_date_time`);
 
         if (dayDate === null) {
@@ -131,10 +131,10 @@ function createWeekForecastGraph(maxDays) {
             continue;
         }
 
-        let temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.TX_C`));
-        let temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.TN_C`));
-        let precipitationVal = parseFloat(getStateValue(`${primaryDayForecastState}.RRR_MM`));
-        let windVal = parseFloat(getStateValue(`${primaryDayForecastState}.FF_KMH`));
+        const temperatureMaxVal = parseFloat(getStateValue(`${primaryDayForecastState}.TX_C`));
+        const temperatureMinVal = parseFloat(getStateValue(`${primaryDayForecastState}.TN_C`));
+        const precipitationVal = parseFloat(getStateValue(`${primaryDayForecastState}.RRR_MM`));
+        const windVal = parseFloat(getStateValue(`${primaryDayForecastState}.FF_KMH`));
 
         if (temperatureMaxVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureMaxVal; }
         if (temperatureMaxVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureMaxVal; }
@@ -183,13 +183,13 @@ function createDayForecastGraph(maxHours) {
         console.warn(`[createDayForecastGraph] No data or outdated data!`);
     } else {
         for (let hour = 0; hour <= maxHours; hour++) {
-            let hourForecastState = `swiss-weather-api.0.forecast.60minutes.day${Math.floor(hour / 24)}.${('0' + (hour % 24)).slice(-2)}:00:00`;
-            let time = (new Date(getStateValue(`${hourForecastState}.local_date_time`))).getTime();
-            let temperatureVal = parseFloat(getStateValue(`${hourForecastState}.TTT_C`));
-            let precipitationVal = getStateValue(`${hourForecastState}.RRR_MM`);
-            let precipitationCancheVal = getStateValue(`${hourForecastState}.PROBPCP_PERCENT`);
-            let windVal = getStateValue(`${hourForecastState}.FF_KMH`);
-            let sunAltitudeVal = sunAltitude(time);
+            const hourForecastState = `swiss-weather-api.0.forecast.60minutes.day${Math.floor(hour / 24)}.${('0' + (hour % 24)).slice(-2)}:00:00`;
+            const time = (new Date(getStateValue(`${hourForecastState}.local_date_time`))).getTime();
+            const temperatureVal = parseFloat(getStateValue(`${hourForecastState}.TTT_C`));
+            const precipitationVal = getStateValue(`${hourForecastState}.RRR_MM`);
+            const precipitationCancheVal = getStateValue(`${hourForecastState}.PROBPCP_PERCENT`);
+            const windVal = getStateValue(`${hourForecastState}.FF_KMH`);
+            const sunAltitudeVal = sunAltitude(time);
         
             if (temperatureVal > data.temperatureAxisMax) { data.temperatureAxisMax = temperatureVal; }
             if (temperatureVal < data.temperatureAxisMin) { data.temperatureAxisMin = temperatureVal; }
@@ -208,11 +208,11 @@ function createDayForecastGraph(maxHours) {
 
     // Add exact timstamps and values for solarNoon, sunrise and sunset
     for (let dayIncrement = 0; dayIncrement <= Math.floor(maxHours / 24); dayIncrement++) {
-        let sunTimes = suncalc.getTimes(moment(dayDate).add(dayIncrement, 'days').add(2, 'hours').toDate(), latitude, longitude);
-        let raiseTime = (new Date(sunTimes['sunrise'])).getTime();
-        let setTime = (new Date(sunTimes['sunset'])).getTime();
-        let noonTime = (new Date(sunTimes['solarNoon'])).getTime();
-        let noonAltitudeVal = sunAltitude(noonTime);
+        const sunTimes = suncalc.getTimes(moment(dayDate).add(dayIncrement, 'days').add(2, 'hours').toDate(), latitude, longitude);
+        const raiseTime = (new Date(sunTimes['sunrise'])).getTime();
+        const setTime = (new Date(sunTimes['sunset'])).getTime();
+        const noonTime = (new Date(sunTimes['solarNoon'])).getTime();
+        const noonAltitudeVal = sunAltitude(noonTime);
 
         if (raiseTime < maxTime) {
             data.sunAltitude.push({t: raiseTime, y: 0});
@@ -458,11 +458,11 @@ function populateChartData(stateName: string, data, additionalConfig) {
 }
 
 function createWeekForecastItemList(maxDays) {
-    let today = moment().startOf('day');
+    const today = moment().startOf('day');
     let iconList = [];
 
     for (let day = 0; day <= maxDays; day++) {
-        let primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
+        const primaryDayForecastState = `swiss-weather-api.0.forecast.day.day${day}.00:00:00`;
         let dayDate = getStateValue(`${primaryDayForecastState}.local_date_time`);
 
         if (dayDate === null) {
@@ -477,11 +477,11 @@ function createWeekForecastItemList(maxDays) {
             continue;
         }
 
-        let title = getDayName(dayDate, today);
-        let forecastText = getSymbolText(getStateValue(`${primaryDayForecastState}.SYMBOL_CODE`));
-        let temperatures = `${getStateValue(`${primaryDayForecastState}.TN_C`)}°C &nbsp; | &nbsp; ${getStateValue(`${primaryDayForecastState}.TX_C`)}°C`;
-        let precipitationChances = `${getStateValue(`${primaryDayForecastState}.PROBPCP_PERCENT`)} %`;
-        let sunTimes = suncalc.getTimes(
+        const title = getDayName(dayDate, today);
+        const forecastText = getSymbolText(getStateValue(`${primaryDayForecastState}.SYMBOL_CODE`));
+        const temperatures = `${getStateValue(`${primaryDayForecastState}.TN_C`)}°C &nbsp; | &nbsp; ${getStateValue(`${primaryDayForecastState}.TX_C`)}°C`;
+        const precipitationChances = `${getStateValue(`${primaryDayForecastState}.PROBPCP_PERCENT`)} %`;
+        const sunTimes = suncalc.getTimes(
             moment(getStateValue(`${primaryDayForecastState}.local_date_time`)).toDate(),
             latitude,
             longitude
@@ -533,7 +533,7 @@ function createWeekForecastItemList(maxDays) {
 }
 
 function getGradientColors(min, max, colorValArray) {
-    let delta = max - min;
+    const delta = max - min;
     let chromaColors = []
     let chromaDomains = [];
 
@@ -542,7 +542,7 @@ function getGradientColors(min, max, colorValArray) {
         chromaDomains.push(item.value / delta);
     }
 
-    let chroma = chromaJs.scale(chromaColors).domain(chromaDomains);
+    const chroma = chromaJs.scale(chromaColors).domain(chromaDomains);
 
     return {
         getColorByValue: function (val) {
