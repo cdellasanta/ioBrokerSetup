@@ -24,6 +24,7 @@ declare function runAfterInitialization(callback: CallableFunction): void;
 declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
 declare function getStateIfExists(stateId: string): any;
 declare function getStateValue(stateId: string): any;
+declare function btoa(string: string): string;
 
 const configuration = getObject('system.config');
 const getLocale = () => getStateValue('0_userdata.0.vis.locale') || defaultLocale;
@@ -100,13 +101,13 @@ function setMapListItems(): void {
 function setViewTranslations(): void {
     setState(
         `${statePrefix}.translations`,
-        JSON.stringify([
+        btoa(JSON.stringify([
         'Original page',
         'Map type',
         'Home',
         'Continent',
         'World'
-        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {}))),
         true
     );
 }

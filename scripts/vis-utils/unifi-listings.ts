@@ -36,7 +36,7 @@ const imagesPath = '/vis.0/myImages/networkDevices/'; // Path for images
 const unifiImagesUrlPrefix = false; // Use '<device model>.png' from your imagesPath
 
 // Optional: display links into a separate view, instead of new navigation window (set false to disable this feature)
-const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: JSON.parse(getState('0_userdata.0.vis.widgetViews').val).indexOf('8_Devices')};
+const devicesView = {currentViewState: '0_userdata.0.vis.currentView', devicesViewKey: JSON.parse(Buffer.from(getState('0_userdata.0.vis.widgetViews').val, 'base64').toString()).indexOf('8_Devices')};
 
 const offlineTextSize = 14;
 const infoIconSize = 20;
@@ -80,6 +80,7 @@ declare function runAfterInitialization(callback: CallableFunction): void;
 declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
 declare function getStateIfExists(stateId: string): any;
 declare function getStateValue(stateId: string): any;
+declare function btoa(string: string): string;
 
 const getLocale = () => getStateValue('0_userdata.0.vis.locale') || defaultLocale;
 
@@ -98,7 +99,7 @@ initializeState(`${statePrefix}.filterMode`, '', {name: 'UniFi device listing: f
 // Sorters, filters and some additional translations are saved in states to permit texts localization
 initializeState(`${statePrefix}.sortersJsonList`, '{}', {name: 'UniFi device listing: sortersJsonList', type: 'string', read: true, write: false});
 initializeState(`${statePrefix}.filtersJsonList`, '{}', {name: 'UniFi device listing: filtersJsonList', type: 'string', read: true, write: false});
-initializeState(`${statePrefix}.translations`, '{}', {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
+initializeState(`${statePrefix}.translations`, btoa('{}'), {name: 'UniFi device listing: viewTranslations', type: 'string', read: true, write: false});
 
 if (devicesView) {
     initializeState(`${statePrefix}.linksJsonList`, '[]', {name: 'Device links listing: linksJsonList', type: 'string'});
@@ -492,11 +493,11 @@ function setFilterItems(): void {
 function setViewTranslations(): void {
     setState(
         `${statePrefix}.translations`,
-        JSON.stringify([
+        btoa(JSON.stringify([
             'Sort by',
             'Filter by',
             'Device'
-        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {}))),
         true
     );
 }

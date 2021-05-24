@@ -11,6 +11,13 @@ const resetStatesOnReload = false; // Enable only when actively developing
 
 let statesInitializing = 0; // Semaphore for runAfterInitialization, handled by initializeState
 
+function btoa (string) {
+    // REF: https://stackoverflow.com/questions/246801/how-can-you-encode-a-string-to-base64-in-javascript
+    // It might sound wired, but we have to use 'ascii' to get the 'utf8' chars to be encoded/decoded correctly
+
+    return Buffer.from(string, 'ascii').toString('base64');
+}
+
 // Helper function for states setup
 function runAfterInitialization(callback) {
     log(`States initializing: ${statesInitializing}`, 'silly');

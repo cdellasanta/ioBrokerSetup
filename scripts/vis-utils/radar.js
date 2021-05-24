@@ -204,12 +204,12 @@ function updateRadarUrls(radarOverlay = null) {
 function setViewTranslations() {
     setState(
         `${statePrefix}.translations`,
-        JSON.stringify([
+        btoa(JSON.stringify([
             'View',
             'Secondary views',
             'Pressure lines (isobars)',
             'Forecast model'
-        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {}))),
         true
     );
 }

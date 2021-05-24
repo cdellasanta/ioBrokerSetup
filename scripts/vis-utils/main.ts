@@ -21,6 +21,7 @@ declare function runAfterInitialization(callback: CallableFunction): void;
 declare function initializeState(stateId: string, defaultValue: any, common: object, listenerChangeType?: string, listenerCallback?: CallableFunction): void;
 declare function getStateIfExists(stateId: string): any;
 declare function getStateValue(stateId: string): any;
+declare function btoa(string: string): string;
 
 initializeState(`${statePrefix}.currentView`, 0, {name: 'Current selected view', type: 'number'});
 initializeState(`${statePrefix}.menuViews`, '[]', {name: 'Views to show in main menu', type: 'string', write: false});
@@ -28,6 +29,8 @@ initializeState(`${statePrefix}.widgetViews`, '[]', {name: 'Views to show in vie
 initializeState(`${statePrefix}.locale`, defaultLocale, {name: 'Selected locale', type: 'string'}, 'ne', setup);
 initializeState(`${statePrefix}.languages`, '[]', {name: 'Localizzed languages list', type: 'string'});
 initializeState(`${statePrefix}.translations`, '{}', {name: 'View translations', type: 'string', write: false});
+initializeState(`${statePrefix}.translationMap`, '{}', {name: 'Multi language translation texts', type: 'string', write: false});
+
 
 runAfterInitialization(()=> {
     setup();
@@ -36,7 +39,7 @@ runAfterInitialization(()=> {
     // because the currend displayed view would be blanked out, until a different view is selected
     setState(
         `${statePrefix}.widgetViews`,
-        JSON.stringify(views.map(item => item.view)),
+        btoa(JSON.stringify(views.map(item => item.view))),
         true
     );
 });
@@ -57,7 +60,7 @@ function setup(): void {
 function setMenuViews(): void {
     setState(
         `${statePrefix}.menuViews`,
-        JSON.stringify(views.map(item => ({label: translate(item.label), icon: item.icon}))),
+        btoa(JSON.stringify(views.map(item => ({label: translate(item.label), icon: item.icon})))),
         true
     );
 }
@@ -65,12 +68,12 @@ function setMenuViews(): void {
 function setViewTranslations(): void {
     setState(
         `${statePrefix}.translations`,
-        JSON.stringify([
+        btoa(JSON.stringify([
             'Home',
             'light',
             'dark',
             'Language'
-        ].reduce((o, key) => ({...o, [key]: translate(key)}), {})),
+        ].reduce((o, key) => ({...o, [key]: translate(key)}), {}))),
         true
     );
 }
@@ -380,7 +383,18 @@ function translate(enText: string, forcedLocale?: boolean): string {
             "pl": "chiński",
             "zh-cn": "中文"
         }
-   };
+    };
+
+    // For the 'basic - view in widget 8' can't change values on runtime (e.g. on locale change), 
+    // because the currend displayed view would be blanked out, until a different view is selected
+    setState(
+        `${statePrefix}.translationMap`,
+        btoa(JSON.stringify(map)),
+        true
+    );
 
     return (map[enText] || {})[forcedLocale || getLocale()] || enText;
 }
+
+
+
